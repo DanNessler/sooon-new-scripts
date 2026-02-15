@@ -200,35 +200,62 @@
 
     // Find the feed card with matching slug
     const feedCards = document.querySelectorAll(config.feedCard);
+    console.log('[Event Share] Total feed cards found:', feedCards.length);
+
+    if (feedCards.length === 0) {
+      console.warn('[Event Share] No feed cards found - CMS may not be loaded yet');
+      return false;
+    }
+
     let targetCard = null;
 
-    feedCards.forEach(card => {
-      const slugEl = card.querySelector(config.feedSlug);
-      if (slugEl && slugEl.textContent.trim() === slug) {
-        targetCard = card;
+    feedCards.forEach((card, index) => {
+      // Try both possible slug selectors
+      let slugEl = card.querySelector(config.feedSlug);
+
+      // Fallback: try the same attribute used in modals
+      if (!slugEl) {
+        slugEl = card.querySelector(config.slugSource);
+      }
+
+      if (slugEl) {
+        const cardSlug = slugEl.textContent.trim();
+        console.log(`[Event Share] Card ${index} slug:`, cardSlug);
+
+        if (cardSlug === slug) {
+          targetCard = card;
+          console.log('[Event Share] ✅ Match found at card', index);
+        }
+      } else {
+        if (index < 3) {
+          console.warn(`[Event Share] Card ${index} has no slug element`);
+        }
       }
     });
 
     if (!targetCard) {
       console.warn('[Event Share] Feed card not found for slug:', slug);
-      return;
+      return false;
     }
 
     console.log('[Event Share] Found target card, scrolling...');
 
-    // Scroll to the card
-    targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Scroll to the card with some offset for better visibility
+    targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     // Clear hash after scroll completes (give scroll time to finish)
     setTimeout(() => {
       history.replaceState(null, '', window.location.pathname);
       console.log('[Event Share] Hash cleared');
     }, 1000);
+
+    return true;
   }
 
   /**
    * Handle deep link on page load
    * Check if URL has #event-[slug] and navigate to it
+   * Retries with exponential backoff if feed cards aren't loaded yet
    */
   function handleDeepLinkOnLoad() {
     const hash = window.location.hash;
@@ -237,11 +264,30 @@
       const slug = hash.replace('#event-', '');
       console.log('[Event Share] Deep link detected on load:', slug);
 
-      // Wait for CMS to populate, then navigate
-      // Using similar pattern to sequential asset loader
-      setTimeout(() => {
-        navigateToEvent(slug);
-      }, 500);
+      // Retry navigation with exponential backoff
+      let attempts = 0;
+      const maxAttempts = 5;
+      const baseDelay = 300;
+
+      function attemptNavigation() {
+        attempts++;
+        console.log(`[Event Share] Navigation attempt ${attempts}/${maxAttempts}`);
+
+        const success = navigateToEvent(slug);
+
+        if (!success && attempts < maxAttempts) {
+          // Exponential backoff: 300ms, 600ms, 1200ms, 2400ms, 4800ms
+          const delay = baseDelay * Math.pow(2, attempts - 1);
+          console.log(`[Event Share] Retrying in ${delay}ms...`);
+
+          setTimeout(attemptNavigation, delay);
+        } else if (!success) {
+          console.error('[Event Share] Failed to navigate after', maxAttempts, 'attempts');
+        }
+      }
+
+      // Start first attempt after initial delay
+      setTimeout(attemptNavigation, baseDelay);
     }
   }
 
