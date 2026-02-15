@@ -197,53 +197,92 @@
    */
   function navigateToEvent(slug) {
     console.log('[Event Share] Navigating to event:', slug);
+    console.log('[Event Share] Looking for slug:', slug);
 
-    // Find the feed card with matching slug
+    // Try both approaches: feed cards AND modal scopes
+
+    // Approach 1: Look in feed cards
     const feedCards = document.querySelectorAll(config.feedCard);
-    console.log('[Event Share] Total feed cards found:', feedCards.length);
+    console.log('[Event Share] Approach 1 - Feed cards (.card_feed_item):', feedCards.length);
 
-    if (feedCards.length === 0) {
-      console.warn('[Event Share] No feed cards found - CMS may not be loaded yet');
-      return false;
-    }
+    // Approach 2: Look in modal scopes (feed cards might be modal scopes)
+    const modalScopes = document.querySelectorAll(config.modalScope);
+    console.log('[Event Share] Approach 2 - Modal scopes (.event_modal_scope):', modalScopes.length);
 
     let targetCard = null;
+    let targetScope = null;
 
-    feedCards.forEach((card, index) => {
-      // Try both possible slug selectors
-      let slugEl = card.querySelector(config.feedSlug);
-
-      // Fallback: try the same attribute used in modals
-      if (!slugEl) {
-        slugEl = card.querySelector(config.slugSource);
-      }
+    // Try finding in modal scopes first (more reliable)
+    modalScopes.forEach((scope, index) => {
+      const slugEl = scope.querySelector(config.slugSource);
 
       if (slugEl) {
         const cardSlug = slugEl.textContent.trim();
-        console.log(`[Event Share] Card ${index} slug:`, cardSlug);
+
+        if (index < 3) {
+          console.log(`[Event Share] Scope ${index} slug: "${cardSlug}"`);
+        }
 
         if (cardSlug === slug) {
-          targetCard = card;
-          console.log('[Event Share] ✅ Match found at card', index);
+          targetScope = scope;
+          console.log('[Event Share] ✅ MATCH found in scope', index);
+          console.log('[Event Share] Matching slug:', cardSlug);
         }
-      } else {
-        if (index < 3) {
-          console.warn(`[Event Share] Card ${index} has no slug element`);
-        }
+      } else if (index < 3) {
+        console.warn(`[Event Share] Scope ${index} has no slug element with selector:`, config.slugSource);
       }
     });
 
+    // If found in modal scope, find the corresponding feed card to scroll to
+    if (targetScope) {
+      targetCard = targetScope.querySelector(config.feedCard);
+      if (!targetCard) {
+        // Maybe the scope IS the card
+        targetCard = targetScope;
+      }
+    }
+
+    // Fallback: try feed cards with both selectors
     if (!targetCard) {
-      console.warn('[Event Share] Feed card not found for slug:', slug);
+      console.log('[Event Share] Not found in scopes, trying feed cards...');
+
+      feedCards.forEach((card, index) => {
+        let slugEl = card.querySelector(config.feedSlug);
+        if (!slugEl) {
+          slugEl = card.querySelector(config.slugSource);
+        }
+
+        if (slugEl) {
+          const cardSlug = slugEl.textContent.trim();
+
+          if (index < 3) {
+            console.log(`[Event Share] Feed card ${index} slug: "${cardSlug}"`);
+          }
+
+          if (cardSlug === slug) {
+            targetCard = card;
+            console.log('[Event Share] ✅ MATCH found in feed card', index);
+          }
+        } else if (index < 3) {
+          console.warn(`[Event Share] Feed card ${index} has no slug element`);
+        }
+      });
+    }
+
+    if (!targetCard) {
+      console.error('[Event Share] ❌ NO MATCH FOUND');
+      console.error('[Event Share] Searched for slug:', slug);
+      console.error('[Event Share] Total modal scopes:', modalScopes.length);
+      console.error('[Event Share] Total feed cards:', feedCards.length);
       return false;
     }
 
-    console.log('[Event Share] Found target card, scrolling...');
+    console.log('[Event Share] Found target element, scrolling...');
 
     // Scroll to the card with some offset for better visibility
     targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // Clear hash after scroll completes (give scroll time to finish)
+    // Clear hash after scroll completes
     setTimeout(() => {
       history.replaceState(null, '', window.location.pathname);
       console.log('[Event Share] Hash cleared');
