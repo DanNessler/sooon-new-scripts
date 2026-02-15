@@ -8,32 +8,283 @@
 
 ## Project Overview
 
-Mobile-first concert discovery platform with full-screen snap-scroll feed, audio previews, and event sharing. Built entirely on Webflow with custom JavaScript for enhanced functionality.
+Mobile-first concert discovery platform with full-screen snap-scroll feed, audio previews, and event sharing. Full-screen snap-scroll feed where users swipe through events with audio previews.
 
-### Live URLs
-- **Production:** https://sooon-new.webflow.io/
-- **Repository:** https://github.com/DanNessler/sooon-new-scripts
-- **Branch:** main
+### Environment
 
-### Webflow Details
-- **Site ID:** `6944209ecd50132eb772fc5b`
-- **Page ID:** `694420a0cd50132eb772fd2b`
+**Production:**
+- URL: https://sooon-new.webflow.io
+- Site ID: `6944209ecd50132eb772fc5b`
+- Home Page ID: `694420a0cd50132eb772fd2b`
+- Team ID: `62a297825ce2ea0165ddd074`
 
----
+**Designer:**
+- URL: https://sooon-new.design.webflow.com
 
-## Key Technical Constraints
-
-1. **Webflow Only** - No external frameworks (React, Vue, etc.)
-2. **iOS Safari Primary** - Mobile-first, optimized for iOS Safari
-3. **Finsweet Attributes v2** - Used for CMS filtering and interactions
-4. **Client-First Class Structure** - Following Client-First naming conventions
-5. **CDN Delivery** - Scripts served via jsDelivr from GitHub
+**Repository:**
+- GitHub: https://github.com/DanNessler/sooon-new-scripts
+- Branch: main
+- CDN: cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/
 
 ---
 
-## Current Custom Scripts
+## Core Constraints
 
-### 1. event-share.js ✅ WORKING
+1. **Webflow only** — No React/Vue/framework rewrites
+2. **iOS Safari primary target** — Most difficult constraint
+3. **Finsweet Attributes v2** — For filtering/CMS interactions
+4. **Client-First naming** — Aligned, not dogmatic
+5. **Stability over cleverness** — Small, safe improvements
+6. **CDN Delivery** — Scripts served via jsDelivr from GitHub
+
+---
+
+## CMS Collections
+
+### Events (694464b1f05b9efbbd9a6d0f)
+
+**Fields:**
+- `name` (PlainText, required) — Event title
+- `slug` (PlainText, required) — URL slug
+- `date` (DateTime) — Event date
+- `artist-1`, `artist-2`, `artist-3` (PlainText) — Up to 3 artists per event
+- `artist-1-img`, `artist-2-img`, `artist-3-img` (Image) — Artist visuals
+- `audio-url`, `audio-url---artist-2`, `audio-url---artist-3` (Link) — Audio preview URLs
+- `artist-1-video-hack-temp` (Link) — Temporary video URL field
+- `venue-name` (PlainText) — Venue name
+- `venue-city` (PlainText) — City name (plain text)
+- `venue-city-ref` (Reference → Support_List_Cities) — City reference for filtering
+- `ticket-link` (Link) — Ticket purchase URL
+- `external-event-id-2` (PlainText) — External ID
+
+**Relationships:**
+- References `Support_List_Cities` via `venue-city-ref` field
+
+**Slug Format:**
+- Pattern: `YYYY-MM-DD-{artist-name}-{venue-identifier}`
+- Example: `2026-01-16-baze-le-singe-37a80`
+
+### Support_List_Cities (6978fd1a463cc054d41c88f6)
+
+**Fields:**
+- `name` (PlainText, required) — City name
+- `slug` (PlainText, required) — URL slug
+
+**Purpose:**
+- Used for Finsweet filter dropdown (location filter)
+- Referenced by Events collection via `venue-city-ref`
+
+---
+
+## Finsweet Attributes v2 Setup
+
+### Main List
+- `fs-list-instance="events"` — Main CMS list identifier
+- `fs-list-element="list"` — Collection list wrapper
+- `fs-list-element="items-count"` — Total items counter
+- `fs-list-element="results-count"` — Filtered results counter
+- `fs-list-element="clear"` — Clear filters button
+- `fs-list-element="filters"` — Filter form element
+
+### Filtering
+- `fs-list-field="city"` — City checkbox filters (uses venue-city-ref)
+- `fs-list-field="event_date"` — Date radio filters
+- `fs-list-operator="equal"` — Exact match operator
+- `fs-list-operator="greater-equal"` — Date range operator
+- `fs-list-element="facet-count"` — Shows count per filter option
+
+### Date Filters (Custom Logic)
+Custom date values injected via JavaScript:
+- `data-date-role="today"` — Today's events
+- `data-date-role="tomorrow"` — Tomorrow's events
+- `data-date-role="next-month-start"` — Next month & later
+
+Implementation in sooon-footer.js (lines 616-647):
+```javascript
+// Dynamically sets filter values based on current date
+// Values: today, tomorrow, next-month-start
+// Format: YYYY-MM-DD
+```
+
+### Sorting
+- `fs-cmssort-field="IDENTIFIER"` — Sort field (appears in list view)
+
+---
+
+## Site Structure & Key Classes
+
+### Main Views
+
+**1. Feed View** (`.card_feed`)
+- Full viewport CMS items
+- CSS `scroll-snap-type: y mandatory`
+- Audio plays at ~60% viewport intersection
+- Snap-scroll behavior
+
+**2. Filter View** (`.filter_screen`)
+- Overlay list view
+- Location & date filtering via Finsweet
+- Clicking item jumps to feed card & closes filter
+- Uses `.stacked-list2_item[data-target-slug]` for linking
+
+**3. Event Modal** (`.event_modal_scope`)
+- Opens on top of feed via Webflow IX
+- Artist info, venue, dates, ticket link
+- Background scroll locked via JS (iOS focus)
+- Share button inside modal
+
+### Feed Card Classes
+- `.card_feed` — Feed container
+- `.card_feed_item` — Individual event card
+- `[data-feed-slug="true"]` — Slug reference for filter jump
+- `[data-event-slug]` — Slug attribute for scroll targeting
+
+### Modal Classes
+- `.event_modal_scope` — Modal container (gets `.is-open` via Webflow IX)
+- `.event_modal` — Inner modal wrapper
+- `.event_modal_hero_artist_content` — Artist hero section
+- `.artist-title.is-active` — Active artist name
+- `.event_location-venue` — Venue name
+- `.event_location-city` — City name
+- `.date_detailed` — Full date string
+- `[data-event-slug-source="true"]` — Event slug (for deep links)
+- `.modal-open-button` — Opens modal
+- `.modal-open-hitarea` — Invisible click area to open modal
+- `.modal-close-button` — Closes modal
+
+### Audio Classes
+- `audio.track-audio, audio.sooon-audio` — Audio elements
+- `[data-sooon-audio-toggle="true"]` — Audio on/off toggle (intro)
+- `[data-sooon-audio-label="true"]` — Audio status label (ON/OFF)
+- `.audio-on-off_button` — Feed card audio toggle button
+- `.audio-on-icon` — Audio ON icon
+- `.audio-off-icon` — Audio OFF icon
+
+### Artist Switcher Classes (Multi-Artist Cards)
+- `.artist-trigger` — Clickable trigger to switch artist
+- `.artist-visual` — Artist visual element
+- `.artist-title` — Artist title element
+- `[data-artist-id="1|2|3"]` — Artist identifier (1, 2, or 3)
+- `.is-active` — Active state class
+
+### Onboarding Classes
+- `[data-sooon-onboarding="screen"]` or `.intro-screen` — Onboarding overlay
+- `[data-sooon-onboarding-confirm="true"]` — "Discover Shows" button
+- `.button-toggle-circle` — Toggle button circle element
+- `.is-on` — Toggle active state
+- `.is-hidden` — Hidden state
+
+### Animation Classes
+- `[data-animate="true"]` — Elements to animate
+- `.anim-start-in` — Initial state (offscreen)
+- `.anim-start-out` — Exit state
+- `data-delay-in` — Entrance delay (ms)
+- `data-delay-out` — Exit delay (ms)
+- `data-exit-threshold` — Exit threshold percentage
+
+### Body States
+- `.is-locked` — Scroll lock (modal open or onboarding)
+
+---
+
+## Audio Logic (Critical)
+
+### Rules
+- **Only one audio plays at a time** (globally enforced)
+- Starts when card is **60% visible** in viewport (IntersectionObserver threshold: 0.6)
+- Stops when card leaves view
+- Respects **iOS autoplay restrictions** (unlocked on user gesture)
+- Stored in `localStorage`: `sooon_audio_enabled` ("1" or "0")
+- **Default: ON** (`DEFAULT_AUDIO_ENABLED = true`)
+
+### Flow
+1. User lands → Check `sooon_onboarding_seen` in localStorage
+2. If first visit → Show onboarding, audio state set but not playing
+3. User clicks "Discover Shows" → Unlock iOS audio, play first visible card
+4. Scroll → Audio switches based on 60% visibility threshold
+5. Toggle audio → Updates localStorage, updates all UI, restarts current audio if turning ON
+
+### Multi-Artist Switching
+- Cards can have up to 3 artists with separate audio tracks
+- Clicking `.artist-trigger` switches active artist
+- Pauses all audios in card, plays selected artist's audio (if enabled)
+- Updates `.is-active` class on visual and title elements
+
+### Audio State Sync
+All audio UI is synchronized via `updateAudioUI()`:
+- Intro toggle button (`.is-on` class)
+- Feed card buttons (`.is-hidden` on icons)
+- Text label (ON/OFF)
+
+### Must Survive
+- Fast scrolling
+- Filter jumps
+- Modal open/close
+- Multi-artist switching
+- Audio toggle on/off
+
+---
+
+## Current Scripts
+
+### 1. sooon-footer.js ✅ PRODUCTION
+**Loaded:** `<body>` end (before `</body>`)
+**Status:** Active, comprehensive
+**Lines:** 648
+
+**Part 1: Sequential Asset Loader (lines 1-161)**
+- **Waits for Webflow CMS** to populate cards (polls until cards.length > 1)
+- **Eager loads** first 3 cards (`EAGER_CARDS = 3`)
+- **Defers images/videos/audio** on cards beyond #3
+  - Stores `src` in `data-src` attribute
+  - Replaces with data URI placeholder
+  - Skips SVG placeholders (case-insensitive "placeholder" check)
+- **Lazy loads** deferred assets when card enters viewport
+  - `IntersectionObserver` with `rootMargin: "200% 0px"`
+  - Restores `src` from `data-src`
+- **Onboarding aware:** Waits for "Discover Shows" click on first visit
+
+**Part 2: General Feed & Audio (lines 163-648)**
+
+**Features:**
+- **Onboarding flow** (first visit vs returning visitor)
+- **Audio state management** (localStorage, default ON)
+- **Modal scroll lock** (compatible with Webflow IX)
+  - Adds `.is-locked` to body on modal open
+  - Removes on modal close
+  - Works with `.modal-open-button`, `.modal-open-hitarea`, `.modal-close-button`
+- **Audio UI sync** (intro toggle + all feed buttons)
+- **Audio intersection observer** (60% threshold)
+- **Audio toggle handlers** (intro + feed buttons via delegation)
+  - Manual restart of current card audio when toggling ON
+- **iOS audio unlock** (on first click/touch)
+- **Scroll animations** (data-animate elements with delays/thresholds)
+- **Universal artist switcher** (multi-artist cards)
+- **Filter-to-feed linking** (clicks `.stacked-list2_item[data-target-slug]`)
+- **Dynamic date filtering** (injects today/tomorrow/next-month values)
+
+**Key Configuration:**
+```javascript
+EAGER_CARDS = 3
+LOAD_DISTANCE = '200%'
+cardSelector = '.card_feed_item'
+audioSelector = 'audio.track-audio, audio.sooon-audio'
+audioObserver threshold = 0.6 (60% visible)
+```
+
+**localStorage Keys:**
+- `sooon_onboarding_seen` — "1" if seen, null if first visit
+- `sooon_audio_enabled` — "1" (ON) or "0" (OFF), default "1"
+
+---
+
+### 2. sooon-head.js ⚠️ EMPTY
+**Status:** Not in use (file is empty)
+**Note:** Asset loading logic is in sooon-footer.js instead
+
+---
+
+### 3. event-share.js ✅ WORKING
 **Status:** Production-ready
 **Current Commit:** `eed1235`
 **Purpose:** Event sharing with deep link navigation
@@ -47,7 +298,7 @@ Mobile-first concert discovery platform with full-screen snap-scroll feed, audio
 
 **Key Selectors:**
 ```javascript
-modalScope: '.event_modal_scope'           // Parent container with event data
+modalScope: '.event_modal_scope'
 shareButton: '[data-share-action="event-share"]'
 activeArtist: '.event_modal_hero_artist_content .heading-h2-4xl'
 venue: '.event_location-venue'
@@ -56,6 +307,10 @@ date: '.date_detailed'
 slugSource: '[data-event-slug-source="true"]'
 feedCard: '.card_feed_item'
 ```
+
+**Share Button:**
+- ID: `e852186a-5748-aafa-a5e2-0a6f63638aaf`
+- Attribute: `data-share-action="event-share"`
 
 **Recent Fixes (2026-02-15):**
 - Fixed modal data extraction (was always reading first event)
@@ -75,50 +330,9 @@ Add to share button in Webflow:
 
 ---
 
-### 2. sooon-footer.js
-**Purpose:** Audio control, modal scroll lock, filter navigation
-**Status:** In production (needs documentation)
-
-**Known functionality:**
-- Audio preview controls
-- Modal scroll lock behavior
-- Filter navigation handling
-
----
-
-### 3. sooon-head.js
-**Purpose:** Asset loader, eager card limiting
-**Status:** In production (needs documentation)
-
-**Known functionality:**
-- Asset loading optimization
-- Limit eager-loaded cards for performance
-
----
-
 ### 4. sooon-styles.css
-**Purpose:** Custom styles
+**Purpose:** Custom global styles
 **Status:** In production (needs documentation)
-
----
-
-## Project Architecture
-
-### DOM Structure (Event Cards)
-```
-.event_modal_scope                    // Container for each event
-  └── .card_feed_item                 // Feed card (visible in scroll)
-      └── [data-event-slug-source]    // Hidden element with unique slug
-  └── .event_modal                    // Modal overlay (hidden by default)
-      └── .is-open                    // Class added when modal opens
-      └── .event_modal_hero_artist_content
-          └── .heading-h2-4xl         // Artist name in modal
-```
-
-### Data Flow
-1. **CMS (Webflow)** → Populates event data in DOM
-2. **Finsweet Attributes** → Handles filtering, sorting, pagination
-3. **Custom Scripts** → Add interactivity (audio, share, navigation)
 
 ---
 
@@ -136,7 +350,7 @@ Add to share button in Webflow:
    ```bash
    git add scripts/[filename].js
    git commit -m "Description of changes"
-   git push
+   git push origin main
    ```
 
 3. **Get Commit Hash:**
@@ -151,27 +365,39 @@ Add to share button in Webflow:
 
 ### CDN Caching
 - **Provider:** jsDelivr
-- **Cache Duration:** ~5-10 minutes
+- **Cache Duration:** ~1 hour (jsDelivr), ~5-10 minutes for updates
 - **Bypass:** Use commit hash in URL (not `@main`)
+- **Force refresh:** Add `?v=2` query param to script URL
 - **Format:** `https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT_HASH}/scripts/{filename}.js`
+
+### Rollback Strategy
+- Keep old inline code commented in Webflow for 24h
+- Test on mobile Safari before removing backup
+- Can revert by changing commit hash in script URL
 
 ---
 
-## CMS Structure (Inferred)
+## Dependencies
 
-### Event Collection
-Based on selectors used in scripts:
-- Artist name (displayed in `.heading-h2-4xl`)
-- Venue name (`.event_location-venue`)
-- City (`.event_location-city`)
-- Date (`.date_detailed`)
-- Slug (unique identifier in `[data-event-slug-source]`)
-- Audio preview (managed by sooon-footer.js)
-- Event images/posters
+### External Libraries
+- **Finsweet Attributes v2** - CMS filtering, sorting, dynamic lists
+  - Used for: Event filtering by city, date
+  - Filter combinations
+  - Result counts
+  - Loaded via Webflow or CDN
 
-### Slug Format
-Pattern: `YYYY-MM-DD-{artist-name}-{venue-identifier}`
-Example: `2026-01-16-baze-le-singe-37a80`
+### Browser APIs Used
+- **IntersectionObserver** - Audio playback trigger (60% threshold), lazy loading (200% rootMargin)
+- **Web Share API** (navigator.share) - Native sharing on mobile
+- **Clipboard API** (navigator.clipboard) - Fallback for desktop sharing
+- **History API** (history.replaceState) - Clean URLs after deep link navigation
+- **localStorage** - Onboarding state, audio preferences
+- **Audio API** - Preview playback
+
+### Browser Support
+- **Primary:** iOS Safari (most restrictive)
+- **Secondary:** Chrome mobile, Desktop Safari, Desktop Chrome
+- **iOS Audio Restrictions:** Handled via user gesture unlock
 
 ---
 
@@ -179,6 +405,7 @@ Example: `2026-01-16-baze-le-singe-37a80`
 
 ### ✅ RESOLVED: Event Share Extraction (2026-02-15)
 **Problem:** Share always extracted first event (Knoppel), not the open modal.
+**Root Cause:** Selectors finding feed card elements instead of modal elements.
 **Solution:** Changed selector from `.event_modal_scope.is-open` to `.event_modal.is-open`, then traverse to parent scope.
 **Commit:** `cb6dbd8`
 
@@ -199,60 +426,17 @@ Example: `2026-01-16-baze-le-singe-37a80`
 
 ---
 
-## Debugging & Console Logs
-
-All custom scripts use `[Script Name]` prefixes for logging.
-
-### Event Share Logs
-
-**Successful deep link navigation:**
-```
-[Event Share] Deep link detected on load: 2026-01-16-baze-le-singe-37a80
-[Event Share] Navigation attempt 1/5
-[Event Share] Approach 1 - Feed cards: 10
-[Event Share] Approach 2 - Modal scopes: 10
-[Event Share] Scope 1 slug: "2026-01-16-baze-le-singe-37a80"
-[Event Share] ✅ MATCH found in scope 1
-[Event Share] Found target element, scrolling...
-```
-
-**Failed navigation:**
-```
-[Event Share] ❌ NO MATCH FOUND
-[Event Share] Searched for slug: {slug}
-[Event Share] Total modal scopes: {count}
-[Event Share] Total feed cards: {count}
-```
-
----
-
-## Dependencies
-
-### External Libraries
-- **Finsweet Attributes v2** - CMS filtering, sorting, dynamic lists
-  - Used for: Event filtering by date, venue, artist
-  - Loaded via Webflow or CDN
-
-### Browser APIs Used
-- **Web Share API** (navigator.share) - Native sharing on mobile
-- **Clipboard API** (navigator.clipboard) - Fallback for desktop
-- **History API** (history.replaceState) - Clean URLs after deep link navigation
-- **IntersectionObserver** (possibly in sooon-head.js for lazy loading)
-- **Audio API** (in sooon-footer.js for previews)
-
----
-
 ## Important File Paths
 
 ```
 sooon-new-scripts/
 ├── scripts/
 │   ├── PROJECT.md              ← This file (Claude's context)
-│   ├── event-share.js          ← Event sharing + deep links
-│   ├── sooon-footer.js         ← Audio, modals, filters
-│   ├── sooon-head.js           ← Asset loading
+│   ├── event-share.js          ← Event sharing + deep links (eed1235)
+│   ├── sooon-footer.js         ← Main functionality (asset loading, audio, modals, filters)
+│   ├── sooon-head.js           ← Empty (not in use)
 │   ├── sooon-styles.css        ← Custom styles
-│   └── test.js                 ← Testing (not in production?)
+│   └── test.js                 ← Testing (not in production)
 ├── PROJECT-HANDOFF.md          ← Detailed handoff docs
 ├── SIMPLE-TEST-GUIDE.md        ← Testing instructions
 ├── diagnostic-deep-link.js     ← Diagnostic tool
@@ -269,6 +453,7 @@ sooon-new-scripts/
 - [ ] Test share dialog opens on mobile
 - [ ] Test clipboard copy on desktop
 - [ ] Verify deep link format is correct
+- [ ] Test on iOS Safari (primary)
 
 ### Deep Link Navigation
 - [ ] Open deep link in new incognito tab
@@ -276,6 +461,36 @@ sooon-new-scripts/
 - [ ] Hash is removed after navigation
 - [ ] Works on slow connections (retry logic)
 - [ ] Console shows successful match
+
+### Audio Functionality
+- [ ] Audio plays on scroll (60% visibility)
+- [ ] Only one audio plays at a time
+- [ ] Audio toggle works (intro + feed buttons)
+- [ ] State persists in localStorage
+- [ ] Multi-artist switching works
+- [ ] Audio respects onboarding flow
+- [ ] iOS audio unlock works on first tap
+
+### Filter & Navigation
+- [ ] City filters work
+- [ ] Date filters work (today/tomorrow/next month)
+- [ ] Clicking filter item jumps to feed card
+- [ ] Filter closes after selection
+- [ ] Result counts update correctly
+
+### Modal Behavior
+- [ ] Modal opens on card click
+- [ ] Background scroll locked
+- [ ] Modal closes on X button
+- [ ] Correct event data shown
+- [ ] Share button works from modal
+
+### Performance
+- [ ] First 3 cards load eagerly
+- [ ] Remaining cards lazy load
+- [ ] Images/videos defer correctly
+- [ ] Lazy load triggers at 200% rootMargin
+- [ ] No jank on fast scrolling
 
 ### Cross-Browser Testing
 - [ ] iOS Safari (primary)
@@ -292,15 +507,18 @@ sooon-new-scripts/
 **Current Status (2026-02-15):**
 - ✅ Event share fully working
 - ✅ Deep link navigation fully working
+- ✅ Audio system robust and tested
+- ✅ Asset loading optimized
 - 🔄 Ready for new features
 
-**Possible Future Enhancements:**
-- Document sooon-footer.js functionality
-- Document sooon-head.js functionality
-- Analytics tracking for shares
-- Custom share images (Open Graph)
-- Calendar export functionality
-- Event reminders
+**Planned Enhancements:**
+- Bookmarking feature
+- Link to location on map apps
+- Add-to-calendar feature
+- Integration of further info via .json endpoint and make.com automation
+- General performance optimization
+- Better UX (animation, interaction, etc.)
+- More specific filters
 
 ---
 
@@ -311,16 +529,30 @@ sooon-new-scripts/
 2. What Webflow elements/attributes are needed?
 3. Does it need CMS data? Which fields?
 4. Mobile vs. desktop considerations
-5. Browser compatibility requirements
-6. Impact on existing features
-7. Console logging strategy
+5. Browser compatibility requirements (iOS Safari restrictions?)
+6. Impact on existing features (audio, modals, filters, etc.)
+7. Console logging strategy (use `[Script Name]` prefix)
+8. localStorage keys needed?
+9. Finsweet attribute interactions?
+10. Does it need to survive onboarding/modal/filter flows?
 
 **Common Gotchas:**
-- jsDelivr caching (always use commit hash, not @main)
-- iOS Safari specific behaviors
-- Webflow CMS load timing (need retry logic)
+- jsDelivr caching (always use commit hash for testing, not @main)
+- iOS Safari audio restrictions (need user gesture to unlock)
+- Webflow CMS load timing (need retry logic or wait for cards)
 - Client-First class naming conventions
 - Finsweet attribute conflicts
+- Modal scroll lock interactions
+- Audio state synchronization (multiple UI elements)
+- Multi-artist card complexity
+
+**Performance Considerations:**
+- Asset loading strategy (eager vs lazy)
+- IntersectionObserver thresholds
+- Event delegation vs direct listeners
+- localStorage reads/writes
+- Query selector performance
+- Scroll event handling
 
 ---
 
@@ -328,15 +560,18 @@ sooon-new-scripts/
 
 When starting fresh chat for new features:
 1. Which script should this modify? (or create new?)
-2. What Webflow elements exist? (selectors, structure)
+2. What Webflow elements exist? (selectors, structure, Webflow IX?)
 3. What CMS fields are available?
 4. Are there Finsweet attributes in use?
 5. Mobile or desktop priority?
 6. Any existing similar functionality to reference?
 7. Should this be in production immediately or staged?
+8. Does it interact with audio system?
+9. Does it need scroll lock or modal handling?
+10. localStorage persistence needed?
 
 ---
 
-**Document Version:** 2.0
+**Document Version:** 3.0
 **Maintained By:** DanNessler + Claude
 **Last Verified Working:** 2026-02-15
