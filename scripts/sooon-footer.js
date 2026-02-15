@@ -1,7 +1,7 @@
-<!-- CUSTOM page based before-body code inject --> 
+//  CUSTOM page based before-body code inject  
 
 
-<!-- Script to limit number of cards loading in feed to optimize performance --> 
+//  Script to limit number of cards loading in feed to optimize performance  
 
 // Sequential Asset Loader — replaces both deferral + observer
 // Waits for Webflow CMS to populate cards, then defers + lazy-loads images
@@ -160,7 +160,7 @@
   }
 })();
 
-<!-- General Feed & Audio Handling --> 
+//  General Feed & Audio Handling  
 
 document.addEventListener("DOMContentLoaded", function() {
 
@@ -587,7 +587,7 @@ document.addEventListener('click', function(e) {
 });
 
 
-<!-- Filter-List & Feed-Linking --> 
+//  Filter-List & Feed-Linking  
 
 document.addEventListener("click", function (e) {
   const item = e.target.closest(".stacked-list2_item[data-target-slug]");
@@ -611,7 +611,7 @@ document.addEventListener("click", function (e) {
   });
 });
 
-<!-- Date filtering Logic --> 
+//  Date filtering Logic  
 
 document.addEventListener("DOMContentLoaded", () => {
   const localISO = (d) => {
