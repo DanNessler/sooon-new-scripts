@@ -30,32 +30,16 @@
   function getEventData() {
     console.log('[Event Share] Extracting event data from modal...');
 
-    // Find the OPEN modal (not just the first one in the DOM)
-    // Try multiple ways to find the visible modal
-    const modals = document.querySelectorAll(config.modalScope);
-    let modal = null;
-
-    // Find the visible modal
-    // Since all modals have display:flex, check parent for .is-open or check opacity
-    for (let i = 0; i < modals.length; i++) {
-      const m = modals[i];
-      const parent = m.closest('.event_modal');
-      const styles = window.getComputedStyle(m);
-
-      // Check if parent has .is-open, or modal has opacity > 0.5, or modal is in viewport
-      if ((parent && parent.classList.contains('is-open')) ||
-          (styles.opacity && parseFloat(styles.opacity) > 0.5) ||
-          (styles.visibility === 'visible' && styles.zIndex !== 'auto' && parseInt(styles.zIndex) > 0)) {
-        modal = m;
-        console.log('[Event Share] Found open modal:', i);
-        break;
-      }
-    }
+    // Find the .event_modal element with .is-open class
+    // Structure: .event_modal_scope > .event_modal.is-open > content
+    const modal = document.querySelector('.event_modal.is-open');
 
     if (!modal) {
-      console.warn('[Event Share] No open modal found');
+      console.warn('[Event Share] No .event_modal.is-open found');
       return null;
     }
+
+    console.log('[Event Share] Found open modal via .is-open class');
 
     // Extract each piece of data with defensive checks
     const activeArtistEl = modal.querySelector(config.activeArtist);
