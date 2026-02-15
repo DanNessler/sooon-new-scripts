@@ -1,1 +1,30 @@
-
+ /* the scrolling container */
+.card_feed-wrapper{
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+/* each full-screen CMS item is a snap point */
+.card_feed_item{
+  height: 100vh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+/* overlay hide + scroll lock */
+.is-hidden { display: none !important; }
+body.is-locked { 
+  overflow: hidden; 
+}
+/* CRITICAL: Lock feed wrapper when modal open */
+body.is-locked .card_feed-wrapper {
+  overflow: hidden !important;
+  touch-action: none;
+}
+/* Ensure modal itself can scroll */
+.event_modal.is-open {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
