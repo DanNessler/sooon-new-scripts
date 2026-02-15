@@ -30,9 +30,25 @@
   function getEventData() {
     console.log('[Event Share] Extracting event data from modal...');
 
-    const modal = document.querySelector(config.modalScope);
+    // Find the OPEN modal (not just the first one in the DOM)
+    // Try multiple ways to find the visible modal
+    const modals = document.querySelectorAll(config.modalScope);
+    let modal = null;
+
+    // Find the visible modal
+    for (let i = 0; i < modals.length; i++) {
+      const m = modals[i];
+      // Check if modal is visible (has is-open class or display is not none)
+      if (m.classList.contains('is-open') ||
+          (m.style.display !== 'none' && window.getComputedStyle(m).display !== 'none')) {
+        modal = m;
+        console.log('[Event Share] Found open modal:', i);
+        break;
+      }
+    }
+
     if (!modal) {
-      console.warn('[Event Share] Modal not found');
+      console.warn('[Event Share] No open modal found');
       return null;
     }
 
