@@ -36,11 +36,16 @@
     let modal = null;
 
     // Find the visible modal
+    // Since all modals have display:flex, check parent for .is-open or check opacity
     for (let i = 0; i < modals.length; i++) {
       const m = modals[i];
-      // Check if modal is visible (has is-open class or display is not none)
-      if (m.classList.contains('is-open') ||
-          (m.style.display !== 'none' && window.getComputedStyle(m).display !== 'none')) {
+      const parent = m.closest('.event_modal');
+      const styles = window.getComputedStyle(m);
+
+      // Check if parent has .is-open, or modal has opacity > 0.5, or modal is in viewport
+      if ((parent && parent.classList.contains('is-open')) ||
+          (styles.opacity && parseFloat(styles.opacity) > 0.5) ||
+          (styles.visibility === 'visible' && styles.zIndex !== 'auto' && parseInt(styles.zIndex) > 0)) {
         modal = m;
         console.log('[Event Share] Found open modal:', i);
         break;
