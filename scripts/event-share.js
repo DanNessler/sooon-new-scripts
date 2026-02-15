@@ -12,7 +12,7 @@
     shareButton: '[data-share-action="event-share"]',
 
     // Modal data selectors (scoped to modal)
-    activeArtist: '.artist-title.is-active',
+    activeArtist: '.event_modal_hero_artist_content .artist-title.is-active',
     venue: '.event_location-venue',
     city: '.event_location-city',
     date: '.date_detailed',
@@ -30,16 +30,16 @@
   function getEventData() {
     console.log('[Event Share] Extracting event data from modal...');
 
-    // Find the .event_modal element with .is-open class
-    // Structure: .event_modal_scope > .event_modal.is-open > content
-    const modal = document.querySelector('.event_modal.is-open');
+    // Find the .event_modal_scope element with .is-open class
+    // Structure: .event_modal_scope.is-open > .event_modal > content
+    const modal = document.querySelector('.event_modal_scope.is-open');
 
     if (!modal) {
-      console.warn('[Event Share] No .event_modal.is-open found');
+      console.warn('[Event Share] No .event_modal_scope.is-open found');
       return null;
     }
 
-    console.log('[Event Share] Found open modal via .is-open class');
+    console.log('[Event Share] Found open modal scope via .is-open class');
 
     // Extract each piece of data with defensive checks
     const activeArtistEl = modal.querySelector(config.activeArtist);
