@@ -300,8 +300,23 @@
     const hash = window.location.hash;
 
     if (hash.startsWith('#event-')) {
-      const slug = hash.replace('#event-', '');
+      // Extract just the slug portion (everything after #event- until first space/special char)
+      // The hash might be: #event-2026-01-16-baze-le-singe-37a80%20Share%20text...
+      // We only want: 2026-01-16-baze-le-singe-37a80
+      let slug = hash.replace('#event-', '');
+
+      // Remove URL encoding and extract only the slug part (before any space or encoded space)
+      slug = decodeURIComponent(slug);
+
+      // Take only the slug portion (before first space if share text was included)
+      // Slug format: YYYY-MM-DD-artist-venue-hash (only letters, numbers, and hyphens)
+      const slugMatch = slug.match(/^[a-zA-Z0-9-]+/);
+      if (slugMatch) {
+        slug = slugMatch[0];
+      }
+
       console.log('[Event Share] Deep link detected on load:', slug);
+      console.log('[Event Share] Original hash:', hash);
 
       // Retry navigation with exponential backoff
       let attempts = 0;
