@@ -31,22 +31,31 @@
     console.log('[Event Share] Extracting event data from modal...');
 
     // Find the .event_modal element with .is-open class
-    // Structure: .event_modal_scope > .event_modal.is-open > content
-    const modal = document.querySelector('.event_modal.is-open');
+    const openModal = document.querySelector('.event_modal.is-open');
 
-    if (!modal) {
+    if (!openModal) {
       console.warn('[Event Share] No .event_modal.is-open found');
       return null;
     }
 
-    console.log('[Event Share] Found open modal via .is-open class');
+    // Get the parent .event_modal_scope (contains all event data)
+    const modalScope = openModal.closest('.event_modal_scope');
 
-    // Extract each piece of data with defensive checks
-    const activeArtistEl = modal.querySelector(config.activeArtist);
-    const venueEl = modal.querySelector(config.venue);
-    const cityEl = modal.querySelector(config.city);
-    const dateEl = modal.querySelector(config.date);
-    const slugSourceEl = modal.querySelector(config.slugSource);
+    if (!modalScope) {
+      console.warn('[Event Share] Could not find parent .event_modal_scope');
+      return null;
+    }
+
+    console.log('[Event Share] Found open modal and its scope');
+
+    // Extract artist from within the modal
+    const activeArtistEl = openModal.querySelector(config.activeArtist);
+
+    // Extract other data from the modal scope (feed card footer/header)
+    const venueEl = modalScope.querySelector(config.venue);
+    const cityEl = modalScope.querySelector(config.city);
+    const dateEl = modalScope.querySelector(config.date);
+    const slugSourceEl = modalScope.querySelector(config.slugSource);
 
     // Get slug from element textContent (Finsweet CMS binds it here)
     const slug = slugSourceEl ? slugSourceEl.textContent.trim() : null;
