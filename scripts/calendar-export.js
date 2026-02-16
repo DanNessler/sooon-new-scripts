@@ -293,7 +293,7 @@
 
     var description = artistLine
       + ' live at ' + data.venue
-      + ' – Check the playing times on the venue`s website, enjoy the show and find more events on http://www.sooon.live';
+      + '  Check the playing times on the venue`s website, enjoy the show and find more events on http://www.sooon.live';
 
     // Generate UID for the event
     var uid = data.slug + '@sooon.live';
