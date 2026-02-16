@@ -199,100 +199,45 @@
 
   /**
    * Navigate to event in feed via deep link hash
-   * Scrolls to the matching feed card
+   * Uses data-event-slug attribute on feed cards (same as filter-to-feed in sooon-core.js)
    */
   function navigateToEvent(slug) {
-    console.log('[Event Share] Navigating to event:', slug);
-    console.log('[Event Share] Looking for slug:', slug);
+    console.log('[Event Share] Navigating to event, slug:', slug);
 
-    // Try both approaches: feed cards AND modal scopes
-
-    // Approach 1: Look in feed cards
-    const feedCards = document.querySelectorAll(config.feedCard);
-    console.log('[Event Share] Approach 1 - Feed cards (.card_feed_item):', feedCards.length);
-
-    // Approach 2: Look in modal scopes (feed cards might be modal scopes)
-    const modalScopes = document.querySelectorAll(config.modalScope);
-    console.log('[Event Share] Approach 2 - Modal scopes (.event_modal_scope):', modalScopes.length);
-
-    let targetCard = null;
-    let targetScope = null;
-
-    // Try finding in modal scopes first (more reliable)
-    modalScopes.forEach((scope, index) => {
-      const slugEl = scope.querySelector(config.slugSource);
-
-      if (slugEl) {
-        const cardSlug = slugEl.textContent.trim();
-
-        if (index < 3) {
-          console.log(`[Event Share] Scope ${index} slug: "${cardSlug}"`);
-        }
-
-        if (cardSlug === slug) {
-          targetScope = scope;
-          console.log('[Event Share] ✅ MATCH found in scope', index);
-          console.log('[Event Share] Matching slug:', cardSlug);
-        }
-      } else if (index < 3) {
-        console.warn(`[Event Share] Scope ${index} has no slug element with selector:`, config.slugSource);
-      }
-    });
-
-    // If found in modal scope, find the corresponding feed card to scroll to
-    if (targetScope) {
-      targetCard = targetScope.querySelector(config.feedCard);
-      if (!targetCard) {
-        // Maybe the scope IS the card
-        targetCard = targetScope;
-      }
-    }
-
-    // Fallback: try feed cards with both selectors
-    if (!targetCard) {
-      console.log('[Event Share] Not found in scopes, trying feed cards...');
-
-      feedCards.forEach((card, index) => {
-        let slugEl = card.querySelector(config.feedSlug);
-        if (!slugEl) {
-          slugEl = card.querySelector(config.slugSource);
-        }
-
-        if (slugEl) {
-          const cardSlug = slugEl.textContent.trim();
-
-          if (index < 3) {
-            console.log(`[Event Share] Feed card ${index} slug: "${cardSlug}"`);
-          }
-
-          if (cardSlug === slug) {
-            targetCard = card;
-            console.log('[Event Share] ✅ MATCH found in feed card', index);
-          }
-        } else if (index < 3) {
-          console.warn(`[Event Share] Feed card ${index} has no slug element`);
-        }
-      });
-    }
+    // Direct attribute selector (matches filter-to-feed pattern in sooon-core.js)
+    const targetCard = document.querySelector('.card_feed_item[data-event-slug="' + CSS.escape(slug) + '"]');
 
     if (!targetCard) {
-      console.error('[Event Share] ❌ NO MATCH FOUND');
-      console.error('[Event Share] Searched for slug:', slug);
-      console.error('[Event Share] Total modal scopes:', modalScopes.length);
-      console.error('[Event Share] Total feed cards:', feedCards.length);
+      const totalCards = document.querySelectorAll('.card_feed_item').length;
+      console.error('[Event Share] No feed card found for slug:', slug);
+      console.log('[Event Share] Total feed cards in DOM:', totalCards);
       return false;
     }
 
-    console.log('[Event Share] Found target element, scrolling...');
+    console.log('[Event Share] Found target card, scrolling...');
 
-    // Scroll to the card with some offset for better visibility
-    targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Ensure body is not locked (deep link visitors skip intro)
+    document.body.classList.remove('is-locked');
 
-    // Clear hash after scroll completes
-    setTimeout(() => {
+    // Instant scroll — smooth scroll fights with CSS scroll-snap and lands on wrong card
+    targetCard.scrollIntoView({ behavior: 'instant', block: 'start' });
+
+    // Verify scroll landed correctly, retry once if missed
+    setTimeout(function() {
+      var rect = targetCard.getBoundingClientRect();
+      var inViewport = rect.top >= -50 && rect.top < window.innerHeight;
+
+      if (inViewport) {
+        console.log('[Event Share] Scroll successful, card in viewport');
+      } else {
+        console.warn('[Event Share] Scroll missed target, retrying...');
+        targetCard.scrollIntoView({ behavior: 'instant', block: 'start' });
+      }
+
+      // Clear hash after navigation
       history.replaceState(null, '', window.location.pathname);
       console.log('[Event Share] Hash cleared');
-    }, 1000);
+    }, 200);
 
     return true;
   }
@@ -306,31 +251,30 @@
     const hash = window.location.hash;
     if (!hash.startsWith('#event-')) return;
 
-    let slug = hash.replace('#event-', '');
+    // Clean slug: decode URL encoding, strip any share text after the slug
+    const rawSlug = hash.replace('#event-', '');
+    const slug = decodeURIComponent(rawSlug).split(/[\s%]/)[0];
 
-    // Remove URL encoding and extract only the slug part
-    slug = decodeURIComponent(slug);
-
-    // Take only the slug portion (before first space if share text was included)
-    const slugMatch = slug.match(/^[a-zA-Z0-9-]+/);
-    if (slugMatch) {
-      slug = slugMatch[0];
+    if (!slug) {
+      console.warn('[Event Share] Could not extract slug from hash:', hash);
+      return;
     }
 
-    console.log('[Event Share] Deep link detected on load:', slug);
+    console.log('[Event Share] Deep link detected, slug:', slug);
     console.log('[Event Share] Original hash:', hash);
 
     // Wait for sooon-core.js feed initialization before navigating
-    let waitTime = 0;
-    const maxWait = 10000; // 10 seconds max
-    const pollInterval = 100;
+    var waitTime = 0;
+    var maxWait = 10000; // 10 seconds max
+    var pollInterval = 100;
 
     function waitForFeedReady() {
       if (window.sooonFeedReady) {
-        console.log('[Event Share] Feed ready, starting deep link navigation');
-        startNavigation();
+        console.log('[Event Share] Feed ready, navigating to event');
+        // Small delay for scroll-snap and observers to settle
+        setTimeout(startNavigation, 150);
       } else if (waitTime >= maxWait) {
-        console.warn('[Event Share] Feed not ready after 10s, attempting navigation anyway');
+        console.warn('[Event Share] Feed not ready after 10s, attempting anyway');
         startNavigation();
       } else {
         waitTime += pollInterval;
@@ -338,30 +282,27 @@
       }
     }
 
-    // Retry navigation with exponential backoff (existing logic)
     function startNavigation() {
-      let attempts = 0;
-      const maxAttempts = 5;
-      const baseDelay = 300;
+      var attempts = 0;
+      var maxAttempts = 3;
+      var baseDelay = 500;
 
       function attemptNavigation() {
         attempts++;
-        console.log(`[Event Share] Navigation attempt ${attempts}/${maxAttempts}`);
+        console.log('[Event Share] Navigation attempt ' + attempts + '/' + maxAttempts);
 
-        const success = navigateToEvent(slug);
+        var success = navigateToEvent(slug);
 
         if (!success && attempts < maxAttempts) {
-          const delay = baseDelay * Math.pow(2, attempts - 1);
-          console.log(`[Event Share] Retrying in ${delay}ms...`);
-
+          var delay = baseDelay * Math.pow(2, attempts - 1);
+          console.log('[Event Share] Retrying in ' + delay + 'ms...');
           setTimeout(attemptNavigation, delay);
         } else if (!success) {
-          console.error('[Event Share] Failed to navigate after', maxAttempts, 'attempts');
+          console.error('[Event Share] Failed to navigate after ' + maxAttempts + ' attempts');
         }
       }
 
-      // Start first attempt after initial delay
-      setTimeout(attemptNavigation, baseDelay);
+      attemptNavigation();
     }
 
     console.log('[Event Share] Waiting for feed initialization...');
