@@ -1,6 +1,6 @@
 # sooon Project Context
 
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-02-16
 **Project Type:** Mobile-first concert discovery platform
 **Stack:** Webflow CMS + Custom JavaScript
 
@@ -330,7 +330,40 @@ Add to share button in Webflow:
 
 ---
 
-### 4. sooon-styles.css
+### 4. venue-map.js ✅ WORKING
+**Status:** Production-ready
+**Current Commit:** `1624a45`
+**Purpose:** Opens venue location in Google Maps from event modals
+
+**Features:**
+- Extracts venue name and city from currently open modal
+- Builds Google Maps search URL: `https://maps.google.com/maps?q={venue},+{city}`
+- Opens map in new tab via `window.open`
+- Event delegation for CMS-generated modal buttons
+
+**Key Selectors:**
+```javascript
+modalScope: '.event_modal_scope'
+mapButton: '[data-map-action="open-venue"]'
+venue: '.event_location-venue'
+city: '.event_location-city'
+```
+
+**Map Button:**
+- Attribute: `data-map-action="open-venue"`
+
+**Modal Data Extraction:**
+- Same pattern as event-share.js: finds `.event_modal.is-open`, traverses to parent `.event_modal_scope`
+- Reads `.event_location-venue` and `.event_location-city` from scope
+
+**Webflow Integration:**
+```html
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@1624a45/scripts/venue-map.js"></script>
+```
+
+---
+
+### 5. sooon-styles.css
 **Purpose:** Custom global styles
 **Status:** In production (needs documentation)
 
@@ -433,6 +466,7 @@ sooon-new-scripts/
 ├── scripts/
 │   ├── PROJECT.md              ← This file (Claude's context)
 │   ├── event-share.js          ← Event sharing + deep links (eed1235)
+│   ├── venue-map.js            ← View on Map from modals (1624a45)
 │   ├── sooon-footer.js         ← Main functionality (asset loading, audio, modals, filters)
 │   ├── sooon-head.js           ← Empty (not in use)
 │   ├── sooon-styles.css        ← Custom styles
@@ -461,6 +495,14 @@ sooon-new-scripts/
 - [ ] Hash is removed after navigation
 - [ ] Works on slow connections (retry logic)
 - [ ] Console shows successful match
+
+### Venue Map Feature
+- [ ] Click map button on different events
+- [ ] Verify correct venue + city extracted (not first event)
+- [ ] Google Maps opens in new tab with correct search query
+- [ ] Works when city is missing (venue-only query)
+- [ ] Test on iOS Safari (opens Maps app or Google Maps)
+- [ ] Test on desktop (opens Google Maps in browser)
 
 ### Audio Functionality
 - [ ] Audio plays on scroll (60% visibility)
@@ -504,16 +546,16 @@ sooon-new-scripts/
 
 *Update this section when starting new work*
 
-**Current Status (2026-02-15):**
+**Current Status (2026-02-16):**
 - ✅ Event share fully working
 - ✅ Deep link navigation fully working
+- ✅ Venue map links fully working
 - ✅ Audio system robust and tested
 - ✅ Asset loading optimized
 - 🔄 Ready for new features
 
 **Planned Enhancements:**
 - Bookmarking feature
-- Link to location on map apps
 - Add-to-calendar feature
 - Integration of further info via .json endpoint and make.com automation
 - General performance optimization
@@ -572,6 +614,6 @@ When starting fresh chat for new features:
 
 ---
 
-**Document Version:** 3.0
+**Document Version:** 4.0
 **Maintained By:** DanNessler + Claude
-**Last Verified Working:** 2026-02-15
+**Last Verified Working:** 2026-02-16
