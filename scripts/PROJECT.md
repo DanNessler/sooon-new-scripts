@@ -1,6 +1,6 @@
 # sooon Project Context
 
-**Last Updated:** 2026-02-16 (v5.0 — script split refactor)
+**Last Updated:** 2026-02-16 (v5.1 — deep link navigation + first-visit handling)
 **Project Type:** Mobile-first concert discovery platform
 **Stack:** Webflow CMS + Custom JavaScript
 
@@ -195,14 +195,16 @@ Implementation in sooon-core.js (date filtering section):
 - Stops when card leaves view
 - Respects **iOS autoplay restrictions** (unlocked on user gesture)
 - Stored in `localStorage`: `sooon_audio_enabled` ("1" or "0")
-- **Default: ON** (`DEFAULT_AUDIO_ENABLED = true`)
+- **Default: ON** (`DEFAULT_AUDIO_ENABLED = true`) — except deep link first visitors (OFF)
 
 ### Flow
 1. User lands → Check `sooon_onboarding_seen` in localStorage
-2. If first visit → Show onboarding, audio state set but not playing
-3. User clicks "Discover Shows" → Unlock iOS audio, play first visible card
-4. Scroll → Audio switches based on 60% visibility threshold
-5. Toggle audio → Updates localStorage, updates all UI, restarts current audio if turning ON
+2. **Deep link first visit** (`#event-{slug}` + never visited) → Skip intro, audio OFF, go to event
+3. **Regular first visit** (no deep link) → Show onboarding, audio ON, wait for "Discover Shows"
+4. **Returning visitor** → Skip intro, use saved audio preference
+5. User clicks "Discover Shows" → Unlock iOS audio, play first visible card
+6. Scroll → Audio switches based on 60% visibility threshold
+7. Toggle audio → Updates localStorage, updates all UI, restarts current audio if turning ON
 
 ### Multi-Artist Switching
 - Cards can have up to 3 artists with separate audio tracks
@@ -240,18 +242,39 @@ Scripts are split into 3 priority tiers for fast intro screen loading.
 ```
 
 ### Coordination Between Scripts
-- **sooon-critical.js** sets `localStorage` + `window.sooonIntroReady = true` when intro is dismissed
-- **sooon-core.js** reads `localStorage` on init, listens for `sooon:audio-changed` custom event from intro toggle
+- **sooon-critical.js** sets `localStorage` + `window.sooonIntroReady = true` when intro is dismissed (or skipped for deep link first visitors)
+- **sooon-core.js** reads `localStorage` on init, listens for `sooon:audio-changed` custom event from intro toggle. Sets `window.sooonFeedReady = true` after feed initialization (cards loaded + assets processed)
 - Both files attach independent click handlers to "Discover Shows" button (critical = state, core = audio)
-- **event-features.js** is fully independent (event delegation, only triggers in modals)
+- **event-features.js** deep link navigation polls `window.sooonFeedReady` before scrolling. Share/map/calendar features are independent (event delegation, only triggers in modals)
+
+### Deep Link Flow (Cross-Script)
+```
+sooon-critical.js (blocking):
+  → Detects #event-{slug} + first visit
+  → Skips intro, sets audio OFF, marks onboarding seen
+  → Sets window.sooonIntroReady = true
+
+sooon-core.js (deferred):
+  → Reads onboarding_seen = '1' → calls start() immediately
+  → Polls for CMS cards → init() → sets window.sooonFeedReady = true
+
+event-features.js (deferred):
+  → Detects #event-{slug} hash
+  → Polls window.sooonFeedReady (100ms intervals, 10s max)
+  → Finds card via data-event-slug attribute
+  → Removes is-locked, scrolls instantly, verifies position
+```
 
 ---
 
-### 1. sooon-critical.js ✅ PRODUCTION (blocking, ~80 lines)
+### 1. sooon-critical.js ✅ PRODUCTION (blocking, ~100 lines)
 **Purpose:** Make intro screen interactive immediately (<1 second)
 **Loaded:** Blocking `<script>` — runs before deferred scripts
 
 **Features:**
+- **Deep link first-visit detection** (`#event-{slug}` + no `sooon_onboarding_seen`)
+  - Skips intro, sets audio OFF, marks onboarding as seen immediately
+  - Returning visitors and regular first visitors unaffected
 - Onboarding flow (check `sooon_onboarding_seen`, show/hide intro screen)
 - Audio toggle on intro screen (`[data-sooon-audio-toggle="true"]`)
 - "Discover Shows" button handler (`[data-sooon-onboarding-confirm="true"]`)
@@ -260,6 +283,7 @@ Scripts are split into 3 priority tiers for fast intro screen loading.
 - Body scroll lock for intro screen (`.is-locked` class)
 - Audio UI sync for intro toggle only (`.button-toggle-circle`, `.is-on`)
 - Dispatches `sooon:audio-changed` custom event when toggle is clicked
+- Sets `window.sooonIntroReady = true` when intro is dismissed or skipped
 
 **Does NOT include:** Feed features, asset loading, modal logic, filters, animations
 
@@ -275,6 +299,7 @@ Scripts are split into 3 priority tiers for fast intro screen loading.
   - Defers images/videos/audio on cards beyond #3 (`data-src` pattern)
   - Lazy loads via `IntersectionObserver` with `rootMargin: "200% 0px"`
   - Onboarding aware: waits for "Discover Shows" click on first visit
+  - **Sets `window.sooonFeedReady = true`** after init completes (signals event-features.js)
 - **Feed audio system**
   - Audio IntersectionObserver (60% threshold)
   - Audio play/pause logic (one at a time, globally enforced)
@@ -302,14 +327,16 @@ audioObserver threshold = 0.6 (60% visible)
 
 ---
 
-### 3. event-features.js ✅ PRODUCTION (deferred, ~640 lines)
+### 3. event-features.js ✅ PRODUCTION (deferred, ~580 lines)
 **Purpose:** Combined event modal features — share, map, calendar export
 **Structure:** 3 independent IIFEs, each with own config and event delegation
 
 **Event Share:**
 - Native Web Share API (mobile) with clipboard fallback (desktop)
 - Deep link generation: `#event-{slug}`
-- Auto-navigation from deep links with exponential backoff retry (5 attempts)
+- **Deep link navigation:** Waits for `window.sooonFeedReady`, uses `data-event-slug` attribute selector (same as filter-to-feed in sooon-core.js), instant scroll with verification + retry
+- Slug cleaning: decodes URL encoding, strips appended share text
+- Removes `is-locked` from body before scrolling
 - Customizable share text via `data-share-template` attribute
 - Button: `[data-share-action="event-share"]`
 
@@ -379,10 +406,10 @@ audioObserver threshold = 0.6 (60% visible)
 
 ### CDN Caching
 - **Provider:** jsDelivr
-- **Cache Duration:** ~1 hour (jsDelivr), ~5-10 minutes for updates
-- **Bypass:** Use commit hash in URL (not `@main`)
-- **Force refresh:** Add `?v=2` query param to script URL
+- **IMPORTANT: `@main` is unreliable** — jsDelivr caches the branch-to-commit resolution aggressively. Purging via `purge.jsdelivr.net` does NOT always work. **Always use commit hash for testing and production.**
+- **Cache Duration:** Unpredictable for `@main` (can be hours). Commit hash URLs are immutable and always correct.
 - **Format:** `https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT_HASH}/scripts/{filename}.js`
+- **Purge endpoint** (unreliable): `https://purge.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/{filename}.js`
 
 ### Rollback Strategy
 - Keep old inline code commented in Webflow for 24h
@@ -423,7 +450,7 @@ audioObserver threshold = 0.6 (60% visible)
 **Solution:** Changed selector from `.event_modal_scope.is-open` to `.event_modal.is-open`, then traverse to parent scope.
 **Commit:** `cb6dbd8`
 
-### ✅ RESOLVED: Deep Link Navigation (2026-02-15)
+### ✅ RESOLVED: Deep Link Navigation v1 (2026-02-15)
 **Problem:** Deep links didn't scroll to event cards.
 **Root Causes:**
 1. CMS not loaded when script ran (timing issue)
@@ -437,6 +464,46 @@ audioObserver threshold = 0.6 (60% visible)
 - Added comprehensive console logging
 
 **Commits:** `6e0a00e`, `eed1235`
+
+### ✅ RESOLVED: Deep Link Race Condition + Wrong Card + Locked Feed (2026-02-16)
+**Problems:**
+1. Deep link navigation ran before feed was initialized (race condition between deferred scripts)
+2. Scrolled to wrong event card (textContent search matched wrong elements)
+3. Feed scroll locked after deep link navigation (`is-locked` stuck on body)
+4. `smooth` scroll fought with CSS `scroll-snap`, landing on adjacent cards
+
+**Root Causes:**
+- `event-features.js` and `sooon-core.js` both load with `defer` and executed independently
+- `navigateToEvent()` searched by iterating modal scopes and comparing `textContent` — fragile
+- No `is-locked` removal before scrolling
+- `behavior: 'smooth'` + `block: 'center'` incompatible with scroll-snap
+
+**Solutions:**
+- **sooon-core.js**: Sets `window.sooonFeedReady = true` after feed init completes
+- **event-features.js**: Polls `sooonFeedReady` (100ms intervals, 10s max) before navigating
+- `navigateToEvent()` now uses direct attribute selector: `.card_feed_item[data-event-slug="{slug}"]` (same pattern as filter-to-feed in sooon-core.js)
+- Removes `is-locked` class before scrolling
+- Uses `behavior: 'instant'` + `block: 'start'` to work with scroll-snap
+- Verifies scroll position after 200ms, retries once if missed
+- 150ms settle delay after feed ready before first scroll attempt
+
+**Commits:** `fc1d5d5`, `a0ee3f2`
+
+### ✅ RESOLVED: Deep Link First-Time Visitors (2026-02-16)
+**Problem:** First-time visitors opening a shared deep link saw the intro screen, blocking navigation to the shared event.
+
+**Solution (sooon-critical.js):**
+- Detects `#event-{slug}` hash + no `sooon_onboarding_seen` in localStorage
+- Skips intro screen entirely, sets audio OFF (no autoplay surprise for shared links)
+- Marks onboarding as seen immediately so `sooon-core.js` initializes feed without waiting
+- Regular first visitors (no deep link) still see intro with audio ON
+
+**Commit:** `9438c40`
+
+### ✅ RESOLVED: jsDelivr CDN Caching (2026-02-16)
+**Problem:** Code changes pushed to GitHub weren't reflected on the live site. jsDelivr's `@main` branch resolution was cached for hours, even after purging.
+
+**Solution:** Always use commit hash in script URLs (e.g., `@a0ee3f2`) instead of `@main`. Commit hash URLs are immutable and always serve the correct version.
 
 ---
 
@@ -475,11 +542,16 @@ sooon-new-scripts/
 - [ ] Test on iOS Safari (primary)
 
 ### Deep Link Navigation
-- [ ] Open deep link in new incognito tab
-- [ ] Page scrolls to correct event
+- [ ] Open deep link in new incognito tab (first-time visitor)
+- [ ] Intro screen is skipped for deep link first visitors
+- [ ] Audio is OFF for deep link first visitors
+- [ ] Page scrolls to correct event card
+- [ ] Feed scroll works normally after navigation (not locked)
 - [ ] Hash is removed after navigation
-- [ ] Works on slow connections (retry logic)
-- [ ] Console shows successful match
+- [ ] Works on slow connections (retry logic with feed ready wait)
+- [ ] Console shows: `[Critical] Deep link detected...` → `[Core] Feed initialization complete...` → `[Event Share] Feed ready...` → `[Event Share] Scroll successful...`
+- [ ] Returning visitor with deep link: uses saved audio preference, skips intro
+- [ ] Regular first visitor (no deep link): sees intro, audio ON
 
 ### Venue Map Feature
 - [ ] Click map button on different events
@@ -549,12 +621,14 @@ sooon-new-scripts/
 
 **Current Status (2026-02-16):**
 - ✅ Event share fully working
-- ✅ Deep link navigation fully working
+- ✅ Deep link navigation with feed-ready synchronization
+- ✅ Deep link first-visit handling (skip intro, audio OFF)
 - ✅ Venue map links fully working
 - ✅ Audio system robust and tested
 - ✅ Asset loading optimized
 - ✅ Calendar export (.ics download) working
 - ✅ Scripts split into 3-tier loading for fast intro screen
+- ✅ Cross-script coordination via `window.sooonFeedReady` flag
 - 🔄 Ready for new features
 
 **Planned Enhancements:**
@@ -580,9 +654,12 @@ sooon-new-scripts/
 10. Does it need to survive onboarding/modal/filter flows?
 
 **Common Gotchas:**
-- jsDelivr caching (always use commit hash for testing, not @main)
+- **jsDelivr `@main` caching is unreliable** — always use commit hash URLs for testing and production. Purge endpoint doesn't reliably clear the branch resolution cache.
 - iOS Safari audio restrictions (need user gesture to unlock)
-- Webflow CMS load timing (need retry logic or wait for cards)
+- Webflow CMS load timing (need retry logic or wait for cards via `window.sooonFeedReady`)
+- **Scroll-snap + smooth scroll conflict** — use `behavior: 'instant'` for programmatic scrolling on snap containers
+- **`is-locked` body class** can get stuck — always remove before programmatic scrolling
+- Cross-script timing: deferred scripts execute independently, use window flags for coordination
 - Client-First class naming conventions
 - Finsweet attribute conflicts
 - Modal scroll lock interactions
@@ -615,6 +692,6 @@ When starting fresh chat for new features:
 
 ---
 
-**Document Version:** 5.0
+**Document Version:** 5.1
 **Maintained By:** DanNessler + Claude
 **Last Verified Working:** 2026-02-16

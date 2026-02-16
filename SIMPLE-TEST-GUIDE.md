@@ -1,71 +1,79 @@
-# Simple Test Guide - Deep Link Fix
+# Simple Test Guide — Deep Link + Share Features
 
-## Step 1: Commit and push the changes
+**Last Updated:** 2026-02-16
 
-```bash
-cd /Users/ddrive/Documents/sooon-new-scripts
-git add scripts/event-share.js
-git commit -m "Add comprehensive deep link diagnostics and dual approach"
-git push
-```
+---
 
-## Step 2: Get the commit hash
+## Quick Test: Deep Link (First-Time Visitor)
 
-```bash
-git log -1 --format="%h"
-```
-
-Copy this hash (it will be something like `a1b2c3d`)
-
-## Step 3: Update Webflow
-
-Go to your Webflow project and update the script tag to:
-
-```html
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@YOUR_COMMIT_HASH/scripts/event-share.js"></script>
-```
-
-Replace `YOUR_COMMIT_HASH` with the hash from step 2.
-
-## Step 4: Test the deep link
-
-1. **Open this URL in a new incognito tab:**
+1. Open an **incognito/private** tab
+2. Paste a deep link URL, e.g.:
    ```
    https://sooon-new.webflow.io/#event-2026-01-16-baze-le-singe-37a80
    ```
+3. **Expected:**
+   - No intro screen shown
+   - Audio is OFF
+   - Correct event card scrolls into view
+   - Feed scrolling works normally
 
-2. **Open the browser console** (Right click → Inspect → Console tab)
+4. Open browser console — look for:
+   ```
+   [Critical] Deep link detected, first visit - skipping intro, audio OFF
+   [Core] Feed initialization complete, ready for deep links
+   [Event Share] Feed ready, navigating to event
+   [Event Share] Scroll successful, card in viewport
+   ```
 
-3. **Look for these log messages:**
-   - `[Event Share] Deep link detected on load: 2026-01-16-baze-le-singe-37a80`
-   - `[Event Share] Navigation attempt 1/5`
-   - `[Event Share] Approach 1 - Feed cards (.card_feed_item): [NUMBER]`
-   - `[Event Share] Approach 2 - Modal scopes (.event_modal_scope): [NUMBER]`
-   - `[Event Share] Scope 0 slug: "..."`
-   - `[Event Share] ✅ MATCH found in scope [NUMBER]`
+---
 
-4. **Copy ALL the console logs** and send them to me
+## Quick Test: Deep Link (Returning Visitor)
 
-## What the logs will tell us:
+1. Open the site normally first (dismiss intro if shown)
+2. Then navigate to a deep link URL
+3. **Expected:**
+   - No intro screen
+   - Audio uses your saved preference
+   - Correct event card scrolls into view
 
-- **If you see numbers for feed cards/modal scopes:** CMS loaded successfully
-- **If you see "Scope X slug: ..."**: We found the slug elements
-- **If you see "✅ MATCH found"**: The slug matched!
-- **If you see "❌ NO MATCH FOUND"**: We'll see what slugs are available vs what we're looking for
+---
 
-## Quick Console Test (Optional)
+## Quick Test: Event Share
 
-If you want to see what's on the page right now, paste this in the console on the Webflow site:
+1. Open the site, scroll to any event
+2. Open the event modal (tap the card)
+3. Click the share button
+4. **Expected:**
+   - Native share dialog (mobile) or "Link copied" alert (desktop)
+   - Share text includes correct artist/venue/date
+   - Deep link format: `#event-{slug}`
 
-```javascript
-console.log('Modal scopes:', document.querySelectorAll('.event_modal_scope').length);
-console.log('Feed cards:', document.querySelectorAll('.card_feed_item').length);
+---
 
-const scope = document.querySelector('.event_modal_scope');
-if (scope) {
-  const slugEl = scope.querySelector('[data-event-slug-source="true"]');
-  console.log('First slug found:', slugEl ? slugEl.textContent.trim() : 'NONE');
-}
-```
+## Quick Test: Regular First Visit (No Deep Link)
 
-This will show if the elements exist and what the slug looks like.
+1. Open an **incognito/private** tab
+2. Go to `https://sooon-new.webflow.io/` (no hash)
+3. **Expected:**
+   - Intro screen shown
+   - Audio toggle shows ON
+   - "Discover Shows" button works
+   - Feed loads after dismissing intro
+
+---
+
+## Troubleshooting
+
+**Scripts not updated?**
+- jsDelivr `@main` caches unpredictably. Ensure Webflow uses commit hash URLs.
+- Get latest hash: `git log -1 --format="%h"` in the repo.
+
+**Deep link scrolls to wrong card?**
+- Check that `.card_feed_item` elements have `data-event-slug` attributes in Webflow.
+- Console should show: `[Event Share] Found target card, scrolling...`
+
+**Feed locked after deep link?**
+- Console should show `is-locked` removal. If stuck, check if another script re-adds it.
+
+**No console logs at all?**
+- Script might not be loaded. Check network tab for 404s on script URLs.

@@ -1,95 +1,109 @@
-# Deep Link Navigation - Test Plan
+# Deep Link Navigation — Technical Test Plan
 
-## Changes Made
+**Last Updated:** 2026-02-16
+**Architecture:** v5.1 (3-script coordination)
 
-### 1. Enhanced `navigateToEvent()` function
-- ✅ Returns `true`/`false` for success/failure (enables retry logic)
-- ✅ Tries **both** slug selectors: `[data-feed-slug="true"]` AND `[data-event-slug-source="true"]`
-- ✅ Improved logging: shows all card slugs for debugging
-- ✅ Changed scroll position from `start` to `center` for better visibility
-- ✅ Checks if feed cards exist before attempting navigation
+---
 
-### 2. Enhanced `handleDeepLinkOnLoad()` function
-- ✅ Retry logic with exponential backoff (300ms → 600ms → 1200ms → 2400ms → 4800ms)
-- ✅ Up to 5 attempts to handle slow CMS loading
-- ✅ Better error reporting if all attempts fail
+## How Deep Link Navigation Works
 
-## Testing Steps
+### Cross-Script Coordination
+1. **sooon-critical.js** (blocking): Detects `#event-{slug}` + first visit → skips intro, audio OFF, marks onboarding seen
+2. **sooon-core.js** (deferred): Reads `onboarding_seen = '1'` → starts immediately → polls for CMS cards → `init()` → sets `window.sooonFeedReady = true`
+3. **event-features.js** (deferred): Polls `sooonFeedReady` every 100ms (max 10s) → finds card via `data-event-slug` attribute → instant scroll → verify → clean hash
 
-### 1. First, commit and push the changes:
+### Navigation Function
+```javascript
+// Uses direct attribute selector (same as filter-to-feed in sooon-core.js)
+const targetCard = document.querySelector('.card_feed_item[data-event-slug="' + CSS.escape(slug) + '"]');
 
-```bash
-git add scripts/event-share.js
-git commit -m "Fix deep link navigation with retry logic and dual selector support"
-git push
+// Removes body lock, scrolls instantly (smooth fights scroll-snap)
+document.body.classList.remove('is-locked');
+targetCard.scrollIntoView({ behavior: 'instant', block: 'start' });
+
+// Verifies scroll position after 200ms, retries once if missed
 ```
 
-### 2. Get the new commit hash:
-
-```bash
-git log -1 --format="%H"
+### Slug Extraction
+```javascript
+// From: #event-2026-01-16-baze-le-singe-37a80%20Check%20out%20this%20show
+// decodeURIComponent → "2026-01-16-baze-le-singe-37a80 Check out this show"
+// .split(/[\s%]/)[0] → "2026-01-16-baze-le-singe-37a80"
 ```
 
-### 3. Update Webflow script tag:
+---
 
-Replace the script tag in Webflow with:
-```html
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@NEW_COMMIT_HASH/scripts/event-share.js"></script>
+## Test Scenarios
+
+### 1. First-Time Visitor + Deep Link
+- Open in incognito: `https://sooon-new.webflow.io/#event-{valid-slug}`
+- **Expected:** No intro, audio OFF, correct card, feed scrollable
+
+### 2. First-Time Visitor + No Deep Link
+- Open in incognito: `https://sooon-new.webflow.io/`
+- **Expected:** Intro shown, audio ON, "Discover Shows" works
+
+### 3. Returning Visitor + Deep Link
+- Visit site first, dismiss intro, then open deep link
+- **Expected:** No intro, saved audio pref, correct card
+
+### 4. Returning Visitor + No Deep Link
+- Normal visit after previous session
+- **Expected:** No intro, saved audio pref, feed loads normally
+
+### 5. Invalid Deep Link Slug
+- Open: `https://sooon-new.webflow.io/#event-nonexistent-slug`
+- **Expected:** Navigation fails gracefully after 3 attempts, console shows error
+
+### 6. Deep Link with Share Text in Hash
+- Open: `https://sooon-new.webflow.io/#event-{slug}%20Check%20out%20this%20show`
+- **Expected:** Slug cleaned correctly, navigates to correct card
+
+---
+
+## Console Output Reference
+
+### Success (first-time visitor):
 ```
-
-### 4. Test the deep link:
-
-1. Open: `https://sooon-new.webflow.io/`
-2. Share an event to get the deep link
-3. Open the deep link in a **new incognito tab** (to ensure fresh load)
-4. Expected: Page should scroll to the matching event card
-5. Check console logs to see:
-   - `[Event Share] Deep link detected on load: {slug}`
-   - `[Event Share] Navigation attempt 1/5`
-   - Card slug comparisons
-   - `[Event Share] ✅ Match found at card X`
-   - `[Event Share] Found target card, scrolling...`
-
-### 5. If it still doesn't work, run the diagnostic:
-
-Open `/Users/ddrive/Documents/sooon-new-scripts/diagnostic-deep-link.js`
-Copy the entire content and paste it into the browser console on the Webflow site.
-
-This will show:
-- How many feed cards exist
-- What slug attributes are available
-- Whether a match was found
-- What the attribute structure looks like
-
-## Expected Console Output (Success)
-
-```
-[Event Share] Script loaded
-[Event Share] Initializing...
-[Event Share] Deep link detected on load: 2026-01-16-baze-le-singe-37a80
-[Event Share] Navigation attempt 1/5
-[Event Share] Navigating to event: 2026-01-16-baze-le-singe-37a80
-[Event Share] Total feed cards found: 24
-[Event Share] Card 0 slug: 2026-02-15-artist-name-xyz
-[Event Share] Card 1 slug: 2026-01-16-baze-le-singe-37a80
-[Event Share] ✅ Match found at card 1
+[Critical] Deep link detected, first visit - skipping intro, audio OFF
+[Core] Feed initialization complete, ready for deep links
+[Event Share] Deep link detected, slug: 2026-01-16-baze-le-singe-37a80
+[Event Share] Waiting for feed initialization...
+[Event Share] Feed ready, navigating to event
+[Event Share] Navigation attempt 1/3
 [Event Share] Found target card, scrolling...
+[Event Share] Scroll successful, card in viewport
 [Event Share] Hash cleared
-[Event Share] Initialized successfully
 ```
 
-## Troubleshooting
+### Success (returning visitor):
+```
+[Critical] Returning visitor, intro skipped
+[Core] Feed initialization complete, ready for deep links
+[Event Share] Deep link detected, slug: 2026-01-16-baze-le-singe-37a80
+[Event Share] Feed ready, navigating to event
+[Event Share] Navigation attempt 1/3
+[Event Share] Found target card, scrolling...
+[Event Share] Scroll successful, card in viewport
+[Event Share] Hash cleared
+```
 
-If navigation still fails after all retries:
+### Failure (slug not found):
+```
+[Event Share] Navigation attempt 1/3
+[Event Share] No feed card found for slug: nonexistent-slug
+[Event Share] Total feed cards in DOM: 24
+[Event Share] Retrying in 500ms...
+...
+[Event Share] Failed to navigate after 3 attempts
+```
 
-1. **Check attribute names**: Run diagnostic script to see actual attribute names
-2. **Check slug format**: Ensure URL slug matches feed card slug exactly
-3. **Check timing**: Increase `maxAttempts` or `baseDelay` if CMS is very slow
-4. **Check Webflow CMS**: Ensure feed cards have the slug field bound correctly
+---
 
-## Key Fixes
+## Key Commits
 
-The main issue was likely:
-- **Timing**: 500ms wasn't enough for CMS to load → Fixed with retry logic
-- **Selector mismatch**: May have been using wrong attribute → Fixed by trying both selectors
-- **No feedback**: Script failed silently → Fixed with detailed logging
+| Commit | Change |
+|---|---|
+| `fc1d5d5` | Added `sooonFeedReady` flag + feed-ready polling in event-features.js |
+| `9438c40` | Deep link first-visit detection in sooon-critical.js |
+| `a0ee3f2` | Fixed navigation: attribute selector, instant scroll, body lock removal |
