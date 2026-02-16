@@ -330,7 +330,52 @@ Add to share button in Webflow:
 
 ---
 
-### 4. venue-map.js ✅ WORKING
+### 4. calendar-export.js ✅ WORKING
+**Status:** Production-ready
+**Purpose:** Generate downloadable .ics calendar file from event modal data
+
+**Features:**
+- Extracts event data from currently open modal (artist, venue, city, date, slug)
+- Parses date text (EN + DE month names) with fallback to native Date.parse
+- Generates valid iCalendar (.ics) file with VCALENDAR/VEVENT structure
+- Triggers browser download as `event-{slug}.ics`
+- Multi-artist support: joins all artist names in description
+- Default time: 20:00–23:00 (configurable in CONFIG)
+
+**Key Selectors:**
+```javascript
+modalScope: '.event_modal_scope'
+calendarButton: '[data-calendar-action="export"]'
+activeArtist: '.event_modal_hero_artist_content .heading-h2-4xl'
+activeArtistAlt: '.artist-title.is-active'
+allArtists: '.artist-title'
+venue: '.event_location-venue'
+city: '.event_location-city'
+date: '.text-weight-bold' (inside .event_modal_detail_content_left_wrapper)
+slugSource: '[data-event-slug-source="true"]'
+```
+
+**Calendar Button:**
+- Attribute: `data-calendar-action="export"`
+
+**ICS Output Format:**
+- Title: `{active-artist} live at {venue-name}`
+- Location: `{venue-name}, {city}`
+- Description: `{artist-1} + {artist-2}\n\nCheck the playing times...`
+- URL: `https://sooon-new.webflow.io/#event-{slug}`
+- Filename: `event-{slug}.ics`
+
+**Modal Data Extraction:**
+- Same pattern as event-share.js / venue-map.js: finds `.event_modal.is-open`, traverses to parent `.event_modal_scope`
+
+**Webflow Integration:**
+```html
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT}/scripts/calendar-export.js"></script>
+```
+
+---
+
+### 5. venue-map.js ✅ WORKING
 **Status:** Production-ready
 **Current Commit:** `1624a45`
 **Purpose:** Opens venue location in Google Maps from event modals
@@ -363,7 +408,7 @@ city: '.event_location-city'
 
 ---
 
-### 5. sooon-styles.css
+### 6. sooon-styles.css
 **Purpose:** Custom global styles
 **Status:** In production (needs documentation)
 
@@ -465,6 +510,7 @@ city: '.event_location-city'
 sooon-new-scripts/
 ├── scripts/
 │   ├── PROJECT.md              ← This file (Claude's context)
+│   ├── calendar-export.js      ← Calendar .ics download from modals
 │   ├── event-share.js          ← Event sharing + deep links (eed1235)
 │   ├── venue-map.js            ← View on Map from modals (1624a45)
 │   ├── sooon-footer.js         ← Main functionality (asset loading, audio, modals, filters)
@@ -503,6 +549,19 @@ sooon-new-scripts/
 - [ ] Works when city is missing (venue-only query)
 - [ ] Test on iOS Safari (opens Maps app or Google Maps)
 - [ ] Test on desktop (opens Google Maps in browser)
+
+### Calendar Export Feature
+- [ ] Click calendar button on different events
+- [ ] Verify correct data extracted (artist, venue, city, date, slug)
+- [ ] .ics file downloads with correct filename (event-{slug}.ics)
+- [ ] Calendar app opens/imports the .ics file
+- [ ] Event title format: "{artist} live at {venue}"
+- [ ] Location field: "{venue}, {city}"
+- [ ] Description includes all artists joined with +
+- [ ] Start time defaults to 20:00, end 23:00
+- [ ] Multi-artist events show all artists in description
+- [ ] Works on iOS Safari (primary)
+- [ ] Works on desktop browsers
 
 ### Audio Functionality
 - [ ] Audio plays on scroll (60% visibility)
@@ -552,11 +611,11 @@ sooon-new-scripts/
 - ✅ Venue map links fully working
 - ✅ Audio system robust and tested
 - ✅ Asset loading optimized
+- ✅ Calendar export (.ics download) working
 - 🔄 Ready for new features
 
 **Planned Enhancements:**
 - Bookmarking feature
-- Add-to-calendar feature
 - Integration of further info via .json endpoint and make.com automation
 - General performance optimization
 - Better UX (animation, interaction, etc.)
