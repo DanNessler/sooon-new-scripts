@@ -292,8 +292,8 @@
       : data.activeArtist || '';
 
     var description = artistLine
-      + '\\n\\n'
-      + 'Check the playing times on the website, enjoy the show and find more events on http://www.sooon.live';
+      + ' '
+      + 'Check the playing times on the venue`s website, enjoy the show and find more events on http://www.sooon.live';
 
     // Generate UID for the event
     var uid = data.slug + '@sooon.live';
@@ -304,7 +304,6 @@
       'VERSION:2.0',
       'PRODID:' + CONFIG.prodId,
       'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
       'BEGIN:VEVENT',
       'UID:' + uid,
       'DTSTART:' + dtStart,
