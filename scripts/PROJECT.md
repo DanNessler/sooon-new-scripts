@@ -1,6 +1,6 @@
 # sooon Project Context
 
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-16 (v5.0 — script split refactor)
 **Project Type:** Mobile-first concert discovery platform
 **Stack:** Webflow CMS + Custom JavaScript
 
@@ -99,7 +99,7 @@ Custom date values injected via JavaScript:
 - `data-date-role="tomorrow"` — Tomorrow's events
 - `data-date-role="next-month-start"` — Next month & later
 
-Implementation in sooon-footer.js (lines 616-647):
+Implementation in sooon-core.js (date filtering section):
 ```javascript
 // Dynamically sets filter values based on current date
 // Values: today, tomorrow, next-month-start
@@ -210,11 +210,11 @@ Implementation in sooon-footer.js (lines 616-647):
 - Pauses all audios in card, plays selected artist's audio (if enabled)
 - Updates `.is-active` class on visual and title elements
 
-### Audio State Sync
-All audio UI is synchronized via `updateAudioUI()`:
-- Intro toggle button (`.is-on` class)
-- Feed card buttons (`.is-hidden` on icons)
-- Text label (ON/OFF)
+### Audio State Sync (Split Architecture)
+- **sooon-critical.js** manages intro toggle UI via `syncToggleUI()` (`.is-on` class, ON/OFF label)
+- **sooon-core.js** manages feed button UI via `updateFeedButtonsUI()` (`.is-hidden` on icons)
+- Coordination: intro toggle dispatches `sooon:audio-changed` event, core.js listens and syncs
+- Both read/write `sooon_audio_enabled` in localStorage
 
 ### Must Survive
 - Fast scrolling
@@ -225,43 +225,67 @@ All audio UI is synchronized via `updateAudioUI()`:
 
 ---
 
-## Current Scripts
+## Current Scripts (v5.0 — Split Architecture)
 
-### 1. sooon-footer.js ✅ PRODUCTION
-**Loaded:** `<body>` end (before `</body>`)
-**Status:** Active, comprehensive
-**Lines:** 648
+Scripts are split into 3 priority tiers for fast intro screen loading.
 
-**Part 1: Sequential Asset Loader (lines 1-161)**
-- **Waits for Webflow CMS** to populate cards (polls until cards.length > 1)
-- **Eager loads** first 3 cards (`EAGER_CARDS = 3`)
-- **Defers images/videos/audio** on cards beyond #3
-  - Stores `src` in `data-src` attribute
-  - Replaces with data URI placeholder
-  - Skips SVG placeholders (case-insensitive "placeholder" check)
-- **Lazy loads** deferred assets when card enters viewport
-  - `IntersectionObserver` with `rootMargin: "200% 0px"`
-  - Restores `src` from `data-src`
-- **Onboarding aware:** Waits for "Discover Shows" click on first visit
+### Load Order (Webflow Before `</body>` tag)
+```html
+<!-- Critical: intro screen works immediately -->
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/sooon-critical.js"></script>
 
-**Part 2: General Feed & Audio (lines 163-648)**
+<!-- Deferred: loads in background while user sees intro -->
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/sooon-core.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/event-features.js" defer></script>
+```
+
+### Coordination Between Scripts
+- **sooon-critical.js** sets `localStorage` + `window.sooonIntroReady = true` when intro is dismissed
+- **sooon-core.js** reads `localStorage` on init, listens for `sooon:audio-changed` custom event from intro toggle
+- Both files attach independent click handlers to "Discover Shows" button (critical = state, core = audio)
+- **event-features.js** is fully independent (event delegation, only triggers in modals)
+
+---
+
+### 1. sooon-critical.js ✅ PRODUCTION (blocking, ~80 lines)
+**Purpose:** Make intro screen interactive immediately (<1 second)
+**Loaded:** Blocking `<script>` — runs before deferred scripts
 
 **Features:**
-- **Onboarding flow** (first visit vs returning visitor)
-- **Audio state management** (localStorage, default ON)
-- **Modal scroll lock** (compatible with Webflow IX)
-  - Adds `.is-locked` to body on modal open
-  - Removes on modal close
-  - Works with `.modal-open-button`, `.modal-open-hitarea`, `.modal-close-button`
-- **Audio UI sync** (intro toggle + all feed buttons)
-- **Audio intersection observer** (60% threshold)
-- **Audio toggle handlers** (intro + feed buttons via delegation)
-  - Manual restart of current card audio when toggling ON
-- **iOS audio unlock** (on first click/touch)
-- **Scroll animations** (data-animate elements with delays/thresholds)
+- Onboarding flow (check `sooon_onboarding_seen`, show/hide intro screen)
+- Audio toggle on intro screen (`[data-sooon-audio-toggle="true"]`)
+- "Discover Shows" button handler (`[data-sooon-onboarding-confirm="true"]`)
+- localStorage read/write for `sooon_onboarding_seen` and `sooon_audio_enabled`
+- iOS audio unlock on first user gesture
+- Body scroll lock for intro screen (`.is-locked` class)
+- Audio UI sync for intro toggle only (`.button-toggle-circle`, `.is-on`)
+- Dispatches `sooon:audio-changed` custom event when toggle is clicked
+
+**Does NOT include:** Feed features, asset loading, modal logic, filters, animations
+
+---
+
+### 2. sooon-core.js ✅ PRODUCTION (deferred, ~400 lines)
+**Purpose:** All feed functionality — loads in background while user sees intro
+
+**Features:**
+- **Sequential asset loader**
+  - Waits for Webflow CMS to populate cards (polls until cards.length > 1)
+  - Eager loads first 3 cards (`EAGER_CARDS = 3`)
+  - Defers images/videos/audio on cards beyond #3 (`data-src` pattern)
+  - Lazy loads via `IntersectionObserver` with `rootMargin: "200% 0px"`
+  - Onboarding aware: waits for "Discover Shows" click on first visit
+- **Feed audio system**
+  - Audio IntersectionObserver (60% threshold)
+  - Audio play/pause logic (one at a time, globally enforced)
+  - Feed card audio toggle buttons (`.audio-on-off_button` via delegation)
+  - Feed audio UI sync (`.audio-on-icon`, `.audio-off-icon`, `.is-hidden`)
+  - Listens for `sooon:audio-changed` event from sooon-critical.js
+- **Modal scroll lock** (`.modal-open-button`, `.modal-open-hitarea`, `.modal-close-button`)
+- **Scroll animations** (`[data-animate="true"]` with delays/thresholds)
 - **Universal artist switcher** (multi-artist cards)
-- **Filter-to-feed linking** (clicks `.stacked-list2_item[data-target-slug]`)
-- **Dynamic date filtering** (injects today/tomorrow/next-month values)
+- **Filter-to-feed linking** (`.stacked-list2_item[data-target-slug]`)
+- **Dynamic date filtering** (Finsweet integration, today/tomorrow/next-month)
 
 **Key Configuration:**
 ```javascript
@@ -278,139 +302,51 @@ audioObserver threshold = 0.6 (60% visible)
 
 ---
 
-### 2. sooon-head.js ⚠️ EMPTY
-**Status:** Not in use (file is empty)
-**Note:** Asset loading logic is in sooon-footer.js instead
+### 3. event-features.js ✅ PRODUCTION (deferred, ~640 lines)
+**Purpose:** Combined event modal features — share, map, calendar export
+**Structure:** 3 independent IIFEs, each with own config and event delegation
+
+**Event Share:**
+- Native Web Share API (mobile) with clipboard fallback (desktop)
+- Deep link generation: `#event-{slug}`
+- Auto-navigation from deep links with exponential backoff retry (5 attempts)
+- Customizable share text via `data-share-template` attribute
+- Button: `[data-share-action="event-share"]`
+
+**Venue Map:**
+- Google Maps URL: `https://maps.google.com/maps?q={venue},+{city}`
+- Opens in new tab
+- Button: `[data-map-action="open-venue"]`
+
+**Calendar Export:**
+- Generates .ics file from modal data (artist, venue, city, date)
+- Parses EN + DE month names with fallback to native Date.parse
+- Default time: 20:00–23:00 (configurable)
+- Downloads as `event-{slug}.ics`
+- Button: `[data-calendar-action="export"]`
+
+**Shared Modal Pattern (all 3 features):**
+- Finds `.event_modal.is-open`, traverses to parent `.event_modal_scope`
+- Reads venue/city/artist/date/slug from scope
 
 ---
 
-### 3. event-share.js ✅ WORKING
-**Status:** Production-ready
-**Current Commit:** `eed1235`
-**Purpose:** Event sharing with deep link navigation
+### Deprecated Scripts (replaced by split architecture)
 
-**Features:**
-- Native Web Share API integration (mobile) with clipboard fallback (desktop)
-- Extracts event data from open modal (artist, venue, city, date, slug)
-- Generates shareable deep links: `#event-{slug}`
-- Auto-navigation to events from deep links with retry logic
-- Customizable share text via Webflow data attributes
-
-**Key Selectors:**
-```javascript
-modalScope: '.event_modal_scope'
-shareButton: '[data-share-action="event-share"]'
-activeArtist: '.event_modal_hero_artist_content .heading-h2-4xl'
-venue: '.event_location-venue'
-city: '.event_location-city'
-date: '.date_detailed'
-slugSource: '[data-event-slug-source="true"]'
-feedCard: '.card_feed_item'
-```
-
-**Share Button:**
-- ID: `e852186a-5748-aafa-a5e2-0a6f63638aaf`
-- Attribute: `data-share-action="event-share"`
-
-**Recent Fixes (2026-02-15):**
-- Fixed modal data extraction (was always reading first event)
-- Fixed deep link navigation (timing + slug extraction issues)
-- Added retry logic with exponential backoff (5 attempts)
-- Handle URL-encoded share text in hash
-
-**Webflow Integration:**
-```html
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@eed1235/scripts/event-share.js"></script>
-```
-
-**Custom Share Text:**
-Add to share button in Webflow:
-- Attribute: `data-share-template`
-- Placeholders: `{artist-1}`, `{venue-name}`, `{venue-city}`, `{date}`
+| Old File | Replaced By | Status |
+|---|---|---|
+| `sooon-footer.js` | `sooon-critical.js` + `sooon-core.js` | Kept for reference |
+| `event-share.js` | `event-features.js` (Event Share section) | Kept for reference |
+| `venue-map.js` | `event-features.js` (Venue Map section) | Kept for reference |
+| `calendar-export.js` | `event-features.js` (Calendar Export section) | Kept for reference |
 
 ---
 
-### 4. calendar-export.js ✅ WORKING
-**Status:** Production-ready
-**Purpose:** Generate downloadable .ics calendar file from event modal data
+### Other Files
 
-**Features:**
-- Extracts event data from currently open modal (artist, venue, city, date, slug)
-- Parses date text (EN + DE month names) with fallback to native Date.parse
-- Generates valid iCalendar (.ics) file with VCALENDAR/VEVENT structure
-- Triggers browser download as `event-{slug}.ics`
-- Multi-artist support: joins all artist names in description
-- Default time: 20:00–23:00 (configurable in CONFIG)
+**sooon-head.js** — Empty, not in use
 
-**Key Selectors:**
-```javascript
-modalScope: '.event_modal_scope'
-calendarButton: '[data-calendar-action="export"]'
-activeArtist: '.event_modal_hero_artist_content .heading-h2-4xl'
-activeArtistAlt: '.artist-title.is-active'
-allArtists: '.artist-title'
-venue: '.event_location-venue'
-city: '.event_location-city'
-date: '.text-weight-bold' (inside .event_modal_detail_content_left_wrapper)
-slugSource: '[data-event-slug-source="true"]'
-```
-
-**Calendar Button:**
-- Attribute: `data-calendar-action="export"`
-
-**ICS Output Format:**
-- Title: `{active-artist} live at {venue-name}`
-- Location: `{venue-name}, {city}`
-- Description: `{artist-1} + {artist-2}\n\nCheck the playing times...`
-- URL: `https://sooon-new.webflow.io/#event-{slug}`
-- Filename: `event-{slug}.ics`
-
-**Modal Data Extraction:**
-- Same pattern as event-share.js / venue-map.js: finds `.event_modal.is-open`, traverses to parent `.event_modal_scope`
-
-**Webflow Integration:**
-```html
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT}/scripts/calendar-export.js"></script>
-```
-
----
-
-### 5. venue-map.js ✅ WORKING
-**Status:** Production-ready
-**Current Commit:** `1624a45`
-**Purpose:** Opens venue location in Google Maps from event modals
-
-**Features:**
-- Extracts venue name and city from currently open modal
-- Builds Google Maps search URL: `https://maps.google.com/maps?q={venue},+{city}`
-- Opens map in new tab via `window.open`
-- Event delegation for CMS-generated modal buttons
-
-**Key Selectors:**
-```javascript
-modalScope: '.event_modal_scope'
-mapButton: '[data-map-action="open-venue"]'
-venue: '.event_location-venue'
-city: '.event_location-city'
-```
-
-**Map Button:**
-- Attribute: `data-map-action="open-venue"`
-
-**Modal Data Extraction:**
-- Same pattern as event-share.js: finds `.event_modal.is-open`, traverses to parent `.event_modal_scope`
-- Reads `.event_location-venue` and `.event_location-city` from scope
-
-**Webflow Integration:**
-```html
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@1624a45/scripts/venue-map.js"></script>
-```
-
----
-
-### 6. sooon-styles.css
-**Purpose:** Custom global styles
-**Status:** In production (needs documentation)
+**sooon-styles.css** — Custom global styles, in production
 
 ---
 
@@ -510,10 +446,13 @@ city: '.event_location-city'
 sooon-new-scripts/
 ├── scripts/
 │   ├── PROJECT.md              ← This file (Claude's context)
-│   ├── calendar-export.js      ← Calendar .ics download from modals
-│   ├── event-share.js          ← Event sharing + deep links (eed1235)
-│   ├── venue-map.js            ← View on Map from modals (1624a45)
-│   ├── sooon-footer.js         ← Main functionality (asset loading, audio, modals, filters)
+│   ├── sooon-critical.js       ← NEW: Intro screen only (blocking, ~80 lines)
+│   ├── sooon-core.js           ← NEW: Feed/audio/modals/filters (deferred, ~400 lines)
+│   ├── event-features.js       ← NEW: Combined share+map+calendar (deferred, ~640 lines)
+│   ├── sooon-footer.js         ← DEPRECATED: replaced by critical + core
+│   ├── event-share.js          ← DEPRECATED: merged into event-features.js
+│   ├── venue-map.js            ← DEPRECATED: merged into event-features.js
+│   ├── calendar-export.js      ← DEPRECATED: merged into event-features.js
 │   ├── sooon-head.js           ← Empty (not in use)
 │   ├── sooon-styles.css        ← Custom styles
 │   └── test.js                 ← Testing (not in production)
@@ -587,6 +526,9 @@ sooon-new-scripts/
 - [ ] Share button works from modal
 
 ### Performance
+- [ ] Intro screen interactive in <2 seconds
+- [ ] sooon-critical.js loads and runs before deferred scripts
+- [ ] Feed ready when user clicks "Discover Shows"
 - [ ] First 3 cards load eagerly
 - [ ] Remaining cards lazy load
 - [ ] Images/videos defer correctly
@@ -612,12 +554,12 @@ sooon-new-scripts/
 - ✅ Audio system robust and tested
 - ✅ Asset loading optimized
 - ✅ Calendar export (.ics download) working
+- ✅ Scripts split into 3-tier loading for fast intro screen
 - 🔄 Ready for new features
 
 **Planned Enhancements:**
 - Bookmarking feature
 - Integration of further info via .json endpoint and make.com automation
-- General performance optimization
 - Better UX (animation, interaction, etc.)
 - More specific filters
 
@@ -673,6 +615,6 @@ When starting fresh chat for new features:
 
 ---
 
-**Document Version:** 4.0
+**Document Version:** 5.0
 **Maintained By:** DanNessler + Claude
 **Last Verified Working:** 2026-02-16
