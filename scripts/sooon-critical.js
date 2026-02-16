@@ -18,8 +18,20 @@
   }
   function setAudioEnabled(on) { localStorage.setItem(KEY_AUDIO, on ? '1' : '0'); }
 
-  // Persist default ON once (first visit)
-  if (localStorage.getItem(KEY_AUDIO) === null) setAudioEnabled(true);
+  // --- Deep link + first visit detection ---
+  var hasDeepLink = window.location.hash.startsWith('#event-');
+  var isFirstVisit = !getSeen();
+  var deepLinkFirstVisit = hasDeepLink && isFirstVisit;
+
+  // Audio default: OFF for deep link first visitors, ON otherwise
+  if (localStorage.getItem(KEY_AUDIO) === null) {
+    setAudioEnabled(!deepLinkFirstVisit);
+  }
+
+  // Deep link first visit: skip intro, mark onboarding as seen
+  if (deepLinkFirstVisit) {
+    setSeen();
+  }
 
   // --- DOM refs ---
   var screen = document.querySelector('[data-sooon-onboarding="screen"]')
@@ -80,5 +92,11 @@
     });
   }
 
-  console.log('[Critical] Intro ready, returning visitor:', getSeen());
+  if (deepLinkFirstVisit) {
+    console.log('[Critical] Deep link detected, first visit - skipping intro, audio OFF');
+  } else if (isFirstVisit) {
+    console.log('[Critical] First visit - showing intro, audio ON by default');
+  } else {
+    console.log('[Critical] Returning visitor, intro skipped');
+  }
 })();
