@@ -126,6 +126,8 @@
     waitForCards(function(cards) {
       if (cards.length > 0) {
         init(cards);
+        window.sooonFeedReady = true;
+        console.log('[Core] Feed initialization complete, ready for deep links');
       }
     });
   }

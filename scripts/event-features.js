@@ -304,23 +304,42 @@
    */
   function handleDeepLinkOnLoad() {
     const hash = window.location.hash;
+    if (!hash.startsWith('#event-')) return;
 
-    if (hash.startsWith('#event-')) {
-      let slug = hash.replace('#event-', '');
+    let slug = hash.replace('#event-', '');
 
-      // Remove URL encoding and extract only the slug part
-      slug = decodeURIComponent(slug);
+    // Remove URL encoding and extract only the slug part
+    slug = decodeURIComponent(slug);
 
-      // Take only the slug portion (before first space if share text was included)
-      const slugMatch = slug.match(/^[a-zA-Z0-9-]+/);
-      if (slugMatch) {
-        slug = slugMatch[0];
+    // Take only the slug portion (before first space if share text was included)
+    const slugMatch = slug.match(/^[a-zA-Z0-9-]+/);
+    if (slugMatch) {
+      slug = slugMatch[0];
+    }
+
+    console.log('[Event Share] Deep link detected on load:', slug);
+    console.log('[Event Share] Original hash:', hash);
+
+    // Wait for sooon-core.js feed initialization before navigating
+    let waitTime = 0;
+    const maxWait = 10000; // 10 seconds max
+    const pollInterval = 100;
+
+    function waitForFeedReady() {
+      if (window.sooonFeedReady) {
+        console.log('[Event Share] Feed ready, starting deep link navigation');
+        startNavigation();
+      } else if (waitTime >= maxWait) {
+        console.warn('[Event Share] Feed not ready after 10s, attempting navigation anyway');
+        startNavigation();
+      } else {
+        waitTime += pollInterval;
+        setTimeout(waitForFeedReady, pollInterval);
       }
+    }
 
-      console.log('[Event Share] Deep link detected on load:', slug);
-      console.log('[Event Share] Original hash:', hash);
-
-      // Retry navigation with exponential backoff
+    // Retry navigation with exponential backoff (existing logic)
+    function startNavigation() {
       let attempts = 0;
       const maxAttempts = 5;
       const baseDelay = 300;
@@ -344,6 +363,9 @@
       // Start first attempt after initial delay
       setTimeout(attemptNavigation, baseDelay);
     }
+
+    console.log('[Event Share] Waiting for feed initialization...');
+    waitForFeedReady();
   }
 
   /**
