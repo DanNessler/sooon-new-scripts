@@ -195,31 +195,37 @@
   }
 
   // ── UI: Favourites list ──
+  // Webflow structure:
+  //   [data-favourites-list="container"]
+  //     └─ .stacked-list2_list          ← items appended here
+  //         └─ [data-favourites-template].is-template  ← hidden clone source
+  //     └─ [data-favourites-empty]      ← empty state (sibling to list)
   function populateFavourites() {
     const container = document.querySelector(SEL.favContainer);
-    const template = document.querySelector(SEL.favTemplate);
-    const emptyMsg = document.querySelector(SEL.favEmpty);
+    if (!container) return;
 
-    if (!container) {
-      // Favourites tab may not exist yet — not an error on first load
+    const listWrapper = container.querySelector('.stacked-list2_list');
+    if (!listWrapper) {
+      console.warn(LOG, 'List wrapper .stacked-list2_list not found inside container.');
       return;
     }
+
+    const template = listWrapper.querySelector(SEL.favTemplate);
     if (!template) {
-      console.warn(LOG, 'Favourites template not found.');
+      console.warn(LOG, 'Favourites template not found inside list wrapper.');
       return;
     }
 
-    // Clear previous items (template lives outside container)
-    container.textContent = '';
+    const emptyMsg = container.querySelector(SEL.favEmpty);
 
-    if (bookmarks.length === 0) {
-      if (emptyMsg) emptyMsg.classList.remove('is-hidden');
-      return;
-    }
+    // Remove all items from listWrapper EXCEPT the .is-template
+    Array.from(listWrapper.children).forEach(function (child) {
+      if (!child.classList.contains('is-template')) {
+        listWrapper.removeChild(child);
+      }
+    });
 
-    if (emptyMsg) emptyMsg.classList.add('is-hidden');
-
-    // Build a slug → scope lookup once
+    // Build slug → scope lookup
     const scopes = document.querySelectorAll(SEL.modalScope);
     const slugToScope = new Map();
     scopes.forEach(function (scope) {
@@ -230,6 +236,7 @@
       }
     });
 
+    // Append a clone for each bookmarked slug
     bookmarks.forEach(function (slug) {
       const scope = slugToScope.get(slug);
       if (!scope) {
@@ -237,13 +244,11 @@
         return;
       }
 
-      // Extract display data from the scope's text elements
       const data = getEventDataFromScope(scope);
 
-      // Clone template and populate
       const clone = template.cloneNode(true);
       clone.removeAttribute('data-favourites-template');
-      clone.classList.remove('is-hidden');
+      clone.classList.remove('is-template');
       clone.setAttribute('data-target-slug', slug);
 
       const favArtist = clone.querySelector('[data-fav-artist]');
@@ -256,8 +261,18 @@
       if (favDate)   favDate.textContent   = data.date;
       if (favCity)   favCity.textContent    = data.city;
 
-      container.appendChild(clone);
+      listWrapper.appendChild(clone);
     });
+
+    // Show/hide empty state based on visible item count
+    const visibleCount = listWrapper.querySelectorAll(':scope > :not(.is-template)').length;
+    if (emptyMsg) {
+      if (visibleCount === 0) {
+        emptyMsg.classList.remove('is-hidden');
+      } else {
+        emptyMsg.classList.add('is-hidden');
+      }
+    }
   }
 
   // ── Master sync ──
