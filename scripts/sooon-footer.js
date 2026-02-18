@@ -1,4 +1,11 @@
-//  CUSTOM page based before-body code inject  
+// Scroll lock cleanup — removes stale is-locked class on page load for returning visitors
+(function () {
+  if (localStorage.getItem('sooon_onboarding_seen') === '1') {
+    document.body.classList.remove('is-locked');
+  }
+})();
+
+//  CUSTOM page based before-body code inject
 
 
 //  Script to limit number of cards loading in feed to optimize performance  
