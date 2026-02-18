@@ -164,6 +164,7 @@
     if (!openModal) return;
 
     const scope = openModal.closest(SEL.modalScope) || openModal;
+    const btn = scope.querySelector(SEL.toggleBtn);
     const inactive = scope.querySelector(SEL.iconInactive);
     const active = scope.querySelector(SEL.iconActive);
     if (!inactive || !active) return;
@@ -171,9 +172,11 @@
     if (isBookmarked(slug)) {
       active.classList.remove('is-hidden');
       inactive.classList.add('is-hidden');
+      if (btn) btn.classList.add('is-bookmarked');
     } else {
       active.classList.add('is-hidden');
       inactive.classList.remove('is-hidden');
+      if (btn) btn.classList.remove('is-bookmarked');
     }
   }
 
