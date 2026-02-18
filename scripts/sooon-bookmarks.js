@@ -4,6 +4,12 @@
 // Allows users to bookmark events from the modal, persists to
 // localStorage, populates a favourites list in the filter view,
 // and syncs bookmark state across all UI elements.
+//
+// DOM structure mirrors event-share.js patterns:
+//  - Slugs live in textContent of [data-event-slug-source] /
+//    [data-feed-slug] elements (Finsweet CMS binding)
+//  - Open modal detected via .event_modal.is-open, then scoped
+//    to parent .event_modal_scope
 // ============================================================
 
 (function () {
@@ -14,17 +20,33 @@
 
   // ── Selectors ──
   const SEL = {
+    // Bookmark button & icons (inside modal)
     toggleBtn:      '[data-bookmark-action="toggle"]',
-    slugSource:     '[data-event-slug-source="true"]',
     iconInactive:   '.bookmark-icon-inactive',
     iconActive:     '.bookmark-icon-active',
+
+    // Slug sources (Finsweet CMS — slug is in textContent)
+    slugSource:     '[data-event-slug-source="true"]',
+    feedSlug:       '[data-feed-slug="true"]',
+
+    // Modal structure
+    openModal:      '.event_modal.is-open',
+    modalScope:     '.event_modal_scope',
+
+    // Modal data text elements (for populating favourites)
+    modalArtist:    '.event_modal_hero_artist_content .heading-h2-4xl',
+    modalVenue:     '.event_location-venue',
+    modalCity:      '.event_location-city',
+    modalDate:      '.date_detailed',
+
+    // Feed cards
     feedCard:       '.card_feed_item',
-    feedSlugAttr:   'data-event-slug',
     bookmarkDot:    '.bookmark-indicator',
+
+    // Favourites tab
     favContainer:   '[data-favourites-list="container"]',
     favTemplate:    '[data-favourites-template="true"]',
     favEmpty:       '[data-favourites-empty="true"]',
-    modalScope:     '.event_modal_scope',
   };
 
   // ── localStorage helpers (graceful degradation) ──
@@ -68,7 +90,7 @@
   }
 
   function addBookmark(slug) {
-    if (isBookmarked(slug)) return; // prevent duplicates
+    if (isBookmarked(slug)) return;
     bookmarks.push(slug);
     writeBookmarks(bookmarks);
     console.log(LOG, 'Added:', slug);
@@ -82,10 +104,68 @@
     console.log(LOG, 'Removed:', slug);
   }
 
+  // ── Slug helpers ──
+
+  /**
+   * Get the slug from the currently open modal.
+   * Mirrors event-share.js: find .event_modal.is-open → parent
+   * .event_modal_scope → [data-event-slug-source] textContent.
+   */
+  function getCurrentSlug() {
+    const openModal = document.querySelector(SEL.openModal);
+    if (!openModal) return null;
+
+    const scope = openModal.closest(SEL.modalScope);
+    if (!scope) return null;
+
+    const el = scope.querySelector(SEL.slugSource);
+    if (!el) return null;
+
+    return el.textContent.trim() || null;
+  }
+
+  /**
+   * Get the slug for a feed card's parent .event_modal_scope.
+   * Each feed card sits inside a scope that has the slug source element.
+   */
+  function getCardSlug(card) {
+    const scope = card.closest(SEL.modalScope);
+    if (!scope) return null;
+
+    // Try [data-event-slug-source] first, then [data-feed-slug]
+    const el = scope.querySelector(SEL.slugSource) || scope.querySelector(SEL.feedSlug);
+    if (!el) return null;
+
+    return el.textContent.trim() || null;
+  }
+
+  /**
+   * Extract event display data from a modal scope for the favourites list.
+   * Uses the same text element selectors as event-share.js.
+   */
+  function getEventDataFromScope(scope) {
+    const artistEl = scope.querySelector(SEL.modalArtist);
+    const venueEl  = scope.querySelector(SEL.modalVenue);
+    const cityEl   = scope.querySelector(SEL.modalCity);
+    const dateEl   = scope.querySelector(SEL.modalDate);
+
+    return {
+      artist: artistEl ? artistEl.textContent.trim() : '',
+      venue:  venueEl  ? venueEl.textContent.trim()  : '',
+      city:   cityEl   ? cityEl.textContent.trim()    : '',
+      date:   dateEl   ? dateEl.textContent.trim()    : '',
+    };
+  }
+
   // ── UI: Modal bookmark button icons ──
+  // Scoped to the open modal so we don't toggle hidden/stale icons
   function updateModalButton(slug) {
-    const inactive = document.querySelector(SEL.iconInactive);
-    const active = document.querySelector(SEL.iconActive);
+    const openModal = document.querySelector(SEL.openModal);
+    if (!openModal) return;
+
+    const scope = openModal.closest(SEL.modalScope) || openModal;
+    const inactive = scope.querySelector(SEL.iconInactive);
+    const active = scope.querySelector(SEL.iconActive);
     if (!inactive || !active) return;
 
     if (isBookmarked(slug)) {
@@ -100,9 +180,11 @@
   // ── UI: Feed card bookmark indicators ──
   function updateFeedIndicators() {
     document.querySelectorAll(SEL.feedCard).forEach(function (card) {
-      const slug = card.getAttribute(SEL.feedSlugAttr);
       const dot = card.querySelector(SEL.bookmarkDot);
-      if (!slug || !dot) return;
+      if (!dot) return;
+
+      const slug = getCardSlug(card);
+      if (!slug) return;
 
       if (isBookmarked(slug)) {
         dot.classList.remove('is-hidden');
@@ -119,15 +201,15 @@
     const emptyMsg = document.querySelector(SEL.favEmpty);
 
     if (!container) {
-      console.error(LOG, 'Favourites container not found.');
+      // Favourites tab may not exist yet — not an error on first load
       return;
     }
     if (!template) {
-      console.error(LOG, 'Favourites template not found.');
+      console.warn(LOG, 'Favourites template not found.');
       return;
     }
 
-    // Clear previous items (template lives outside container, so it's preserved)
+    // Clear previous items (template lives outside container)
     container.textContent = '';
 
     if (bookmarks.length === 0) {
@@ -137,22 +219,26 @@
 
     if (emptyMsg) emptyMsg.classList.add('is-hidden');
 
-    bookmarks.forEach(function (slug) {
-      // Find the feed card to extract event data
-      const card = document.querySelector(
-        SEL.feedCard + '[' + SEL.feedSlugAttr + '="' + CSS.escape(slug) + '"]'
-      );
+    // Build a slug → scope lookup once
+    const scopes = document.querySelectorAll(SEL.modalScope);
+    const slugToScope = new Map();
+    scopes.forEach(function (scope) {
+      const el = scope.querySelector(SEL.slugSource);
+      if (el) {
+        const s = el.textContent.trim();
+        if (s) slugToScope.set(s, scope);
+      }
+    });
 
-      if (!card) {
-        console.warn(LOG, 'Feed card not found for slug:', slug);
-        return; // skip orphaned bookmarks
+    bookmarks.forEach(function (slug) {
+      const scope = slugToScope.get(slug);
+      if (!scope) {
+        console.warn(LOG, 'Scope not found for slug:', slug);
+        return;
       }
 
-      // Extract data from the feed card's data attributes
-      const artist = card.getAttribute('data-event-artist') || '';
-      const venue  = card.getAttribute('data-event-venue')  || '';
-      const date   = card.getAttribute('data-event-date')   || '';
-      const city   = card.getAttribute('data-event-city')   || '';
+      // Extract display data from the scope's text elements
+      const data = getEventDataFromScope(scope);
 
       // Clone template and populate
       const clone = template.cloneNode(true);
@@ -165,33 +251,23 @@
       const favDate   = clone.querySelector('[data-fav-date]');
       const favCity   = clone.querySelector('[data-fav-city]');
 
-      if (favArtist) favArtist.textContent = artist;
-      if (favVenue)  favVenue.textContent  = venue;
-      if (favDate)   favDate.textContent   = date;
-      if (favCity)   favCity.textContent    = city;
+      if (favArtist) favArtist.textContent = data.artist;
+      if (favVenue)  favVenue.textContent  = data.venue;
+      if (favDate)   favDate.textContent   = data.date;
+      if (favCity)   favCity.textContent    = data.city;
 
       container.appendChild(clone);
     });
   }
 
-  // ── Master sync: update all UI elements ──
+  // ── Master sync ──
   function syncAll(currentSlug) {
     if (currentSlug) updateModalButton(currentSlug);
     updateFeedIndicators();
     populateFavourites();
   }
 
-  // ── Get current event slug from the modal ──
-  // Scoped to the open modal to avoid matching stale/hidden elements
-  function getCurrentSlug() {
-    const modal = document.querySelector(SEL.modalScope);
-    const scope = (modal && modal.classList.contains('is-open')) ? modal : document;
-    const el = scope.querySelector(SEL.slugSource);
-    if (!el) return null;
-    return el.getAttribute(SEL.feedSlugAttr) || null;
-  }
-
-  // ── Debounce helper for rapid clicks ──
+  // ── Debounce for rapid clicks ──
   let toggleLock = false;
 
   // ── Event: Bookmark toggle button click ──
@@ -222,23 +298,27 @@
   });
 
   // ── Modal open detection: sync button state ──
-  // Uses a MutationObserver to detect when the modal gains .is-open
-  const modalScope = document.querySelector(SEL.modalScope);
-  if (modalScope) {
-    const observer = new MutationObserver(function () {
-      if (modalScope.classList.contains('is-open')) {
-        // Small delay to let Webflow populate modal content
-        setTimeout(function () {
-          const slug = getCurrentSlug();
-          if (slug) updateModalButton(slug);
-        }, 100);
-      }
+  // Observe class changes on every .event_modal_scope to catch whichever
+  // modal is opened (Webflow generates one scope per CMS item).
+  function observeModalOpens() {
+    const scopes = document.querySelectorAll(SEL.modalScope);
+    scopes.forEach(function (scope) {
+      const modal = scope.querySelector('.event_modal');
+      if (!modal) return;
+
+      const obs = new MutationObserver(function () {
+        if (modal.classList.contains('is-open')) {
+          setTimeout(function () {
+            const slug = getCurrentSlug();
+            if (slug) updateModalButton(slug);
+          }, 100);
+        }
+      });
+      obs.observe(modal, { attributes: true, attributeFilter: ['class'] });
     });
-    observer.observe(modalScope, { attributes: true, attributeFilter: ['class'] });
   }
 
   // ── Initial sync on page load ──
-  // Wait for Webflow CMS cards to be populated (mirrors sooon-footer.js pattern)
   function waitForCardsAndInit() {
     let attempts = 0;
     const check = setInterval(function () {
@@ -246,8 +326,9 @@
       attempts++;
       if (cards.length > 1 || attempts > 40) {
         clearInterval(check);
+        observeModalOpens();
         console.log(LOG, 'Initialized with', bookmarks.length, 'bookmark(s).');
-        syncAll(getCurrentSlug());
+        syncAll(null); // no modal open at init
       }
     }, 50);
   }
