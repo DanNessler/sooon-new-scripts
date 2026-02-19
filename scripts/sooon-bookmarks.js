@@ -164,7 +164,6 @@
     if (!openModal) return;
 
     const scope = openModal.closest(SEL.modalScope) || openModal;
-    const btn = scope.querySelector(SEL.toggleBtn);
     const inactive = scope.querySelector(SEL.iconInactive);
     const active = scope.querySelector(SEL.iconActive);
     if (!inactive || !active) return;
@@ -172,39 +171,25 @@
     if (isBookmarked(slug)) {
       active.classList.remove('is-hidden');
       inactive.classList.add('is-hidden');
-      if (btn) btn.classList.add('is-bookmarked');
     } else {
       active.classList.add('is-hidden');
       inactive.classList.remove('is-hidden');
-      if (btn) btn.classList.remove('is-bookmarked');
     }
-    if (btn) console.log(LOG, 'Button class toggled: is-bookmarked =', btn.classList.contains('is-bookmarked'));
   }
 
   // ── UI: Feed card bookmark indicators ──
   function updateFeedIndicators() {
     document.querySelectorAll(SEL.feedCard).forEach(function (card) {
+      const dot = card.querySelector(SEL.bookmarkDot);
+      if (!dot) return;
+
       const slug = getCardSlug(card);
       if (!slug) return;
 
-      const dot = card.querySelector(SEL.bookmarkDot);
-      if (dot) {
-        if (isBookmarked(slug)) {
-          dot.classList.remove('is-hidden');
-        } else {
-          dot.classList.add('is-hidden');
-        }
-      }
-
-      // Toggle .is-bookmarked on the button within this card's scope
-      const scope = card.closest(SEL.modalScope);
-      if (scope) {
-        const btn = scope.querySelector(SEL.toggleBtn);
-        if (btn) {
-          var active = isBookmarked(slug);
-          btn.classList.toggle('is-bookmarked', active);
-          console.log(LOG, 'Button class toggled: is-bookmarked =', btn.classList.contains('is-bookmarked'));
-        }
+      if (isBookmarked(slug)) {
+        dot.classList.remove('is-hidden');
+      } else {
+        dot.classList.add('is-hidden');
       }
     });
   }

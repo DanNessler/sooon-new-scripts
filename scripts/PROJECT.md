@@ -1,6 +1,6 @@
 # sooon Project Context
 
-**Last Updated:** 2026-02-16 (v5.1 — deep link navigation + first-visit handling)
+**Last Updated:** 2026-02-19 (v5.2 — bookmarks feature)
 **Project Type:** Mobile-first concert discovery platform
 **Stack:** Webflow CMS + Custom JavaScript
 
@@ -8,7 +8,7 @@
 
 ## Project Overview
 
-Mobile-first concert discovery platform with full-screen snap-scroll feed, audio previews, and event sharing. Full-screen snap-scroll feed where users swipe through events with audio previews.
+Mobile-first concert discovery platform with full-screen snap-scroll feed, audio previews, event sharing, and bookmarking. Full-screen snap-scroll feed where users swipe through events with audio previews.
 
 ### Environment
 
@@ -147,7 +147,7 @@ Implementation in sooon-core.js (date filtering section):
 - `.event_location-venue` — Venue name
 - `.event_location-city` — City name
 - `.date_detailed` — Full date string
-- `[data-event-slug-source="true"]` — Event slug (for deep links)
+- `[data-event-slug-source="true"]` — Event slug (for deep links & bookmarks)
 - `.modal-open-button` — Opens modal
 - `.modal-open-hitarea` — Invisible click area to open modal
 - `.modal-close-button` — Closes modal
@@ -166,6 +166,18 @@ Implementation in sooon-core.js (date filtering section):
 - `.artist-title` — Artist title element
 - `[data-artist-id="1|2|3"]` — Artist identifier (1, 2, or 3)
 - `.is-active` — Active state class
+
+### Bookmark Classes & Selectors
+- `[data-bookmark-action="toggle"]` — Bookmark toggle button (inside modal)
+- `.bookmark-icon-inactive` — Icon shown when NOT bookmarked
+- `.bookmark-icon-active` — Icon shown when bookmarked
+- `.bookmark-indicator` — Dot indicator on feed cards (visible when bookmarked)
+- `[data-event-slug-source="true"]` — Slug source (shared with share/map/calendar features)
+- `[data-feed-slug="true"]` — Fallback slug source on feed cards
+- `[data-favourites-list="container"]` — Favourites tab container
+- `[data-favourites-template="true"]` — Hidden clone source for favourites list items
+- `[data-favourites-empty="true"]` — Empty state message in favourites tab
+- `[data-fav-artist]`, `[data-fav-venue]`, `[data-fav-date]`, `[data-fav-city]` — Text targets in favourites clone
 
 ### Onboarding Classes
 - `[data-sooon-onboarding="screen"]` or `.intro-screen` — Onboarding overlay
@@ -227,25 +239,29 @@ Implementation in sooon-core.js (date filtering section):
 
 ---
 
-## Current Scripts (v5.0 — Split Architecture)
+## Current Scripts (v5.2 — Split Architecture + Bookmarks)
 
-Scripts are split into 3 priority tiers for fast intro screen loading.
+Scripts are split into tiers for fast intro screen loading.
 
 ### Load Order (Webflow Before `</body>` tag)
 ```html
 <!-- Critical: intro screen works immediately -->
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/sooon-critical.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT_HASH}/scripts/sooon-critical.js"></script>
 
 <!-- Deferred: loads in background while user sees intro -->
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/sooon-core.js" defer></script>
-<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@main/scripts/event-features.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT_HASH}/scripts/sooon-core.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT_HASH}/scripts/event-features.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT_HASH}/scripts/sooon-bookmarks.js" defer></script>
 ```
+
+**IMPORTANT:** Always use a commit hash (e.g., `@fe504b4`), NOT `@main`. jsDelivr caches `@main` unpredictably — even purging via `purge.jsdelivr.net` is unreliable. Commit hash URLs are immutable and always correct.
 
 ### Coordination Between Scripts
 - **sooon-critical.js** sets `localStorage` + `window.sooonIntroReady = true` when intro is dismissed (or skipped for deep link first visitors)
 - **sooon-core.js** reads `localStorage` on init, listens for `sooon:audio-changed` custom event from intro toggle. Sets `window.sooonFeedReady = true` after feed initialization (cards loaded + assets processed)
 - Both files attach independent click handlers to "Discover Shows" button (critical = state, core = audio)
 - **event-features.js** deep link navigation polls `window.sooonFeedReady` before scrolling. Share/map/calendar features are independent (event delegation, only triggers in modals)
+- **sooon-bookmarks.js** is fully independent — no cross-script flags needed
 
 ### Deep Link Flow (Cross-Script)
 ```
@@ -358,6 +374,38 @@ audioObserver threshold = 0.6 (60% visible)
 
 ---
 
+### 4. sooon-bookmarks.js ✅ PRODUCTION (deferred, ~360 lines)
+**Purpose:** Event bookmarking with localStorage persistence and favourites list
+**Console prefix:** `[Bookmarks]`
+
+**Features:**
+- **Toggle bookmark** — Click `[data-bookmark-action="toggle"]` inside open modal
+- **Icon state** — Toggles `.is-hidden` on `.bookmark-icon-inactive` / `.bookmark-icon-active`
+- **Feed card indicator** — Toggles `.is-hidden` on `.bookmark-indicator` dot per card
+- **Favourites list population** — Clones `[data-favourites-template]` for each bookmarked slug into `.stacked-list2_list` inside `[data-favourites-list="container"]`
+- **Modal open sync** — MutationObserver on `.event_modal` detects `is-open` class, syncs button icon state 100ms after open
+- **Page load restore** — Polls for cards (50ms interval, max 40 attempts), then `syncAll()` restores all indicators from localStorage
+- **Graceful degradation** — Works without localStorage (storage errors caught silently)
+
+**Slug resolution:**
+- Modal: `[data-event-slug-source="true"]` textContent inside `.event_modal_scope`
+- Feed cards: `[data-event-slug-source="true"]` or `[data-feed-slug="true"]` inside `.event_modal_scope`
+
+**localStorage Key:**
+- `sooon_bookmarks` — JSON array of bookmarked slugs e.g. `["2026-01-16-baze-le-singe-37a80"]`
+
+**Favourites list DOM structure expected:**
+```
+[data-favourites-list="container"]
+  └─ .stacked-list2_list
+      └─ [data-favourites-template].is-template  ← hidden clone source
+  └─ [data-favourites-empty]                     ← empty state
+```
+
+**Favourites clone targets:** `[data-fav-artist]`, `[data-fav-venue]`, `[data-fav-date]`, `[data-fav-city]`
+
+---
+
 ### Deprecated Scripts (replaced by split architecture)
 
 | Old File | Replaced By | Status |
@@ -400,7 +448,7 @@ audioObserver threshold = 0.6 (60% visible)
    ```
 
 4. **Update Webflow:**
-   - Update script tag with new commit hash
+   - Update all 4 script tags with new commit hash
    - Publish site
    - Test in incognito tab (cache bypass)
 
@@ -432,8 +480,9 @@ audioObserver threshold = 0.6 (60% visible)
 - **Web Share API** (navigator.share) - Native sharing on mobile
 - **Clipboard API** (navigator.clipboard) - Fallback for desktop sharing
 - **History API** (history.replaceState) - Clean URLs after deep link navigation
-- **localStorage** - Onboarding state, audio preferences
+- **localStorage** - Onboarding state, audio preferences, bookmarks
 - **Audio API** - Preview playback
+- **MutationObserver** - Modal open detection (bookmarks)
 
 ### Browser Support
 - **Primary:** iOS Safari (most restrictive)
@@ -481,7 +530,7 @@ audioObserver threshold = 0.6 (60% visible)
 **Solutions:**
 - **sooon-core.js**: Sets `window.sooonFeedReady = true` after feed init completes
 - **event-features.js**: Polls `sooonFeedReady` (100ms intervals, 10s max) before navigating
-- `navigateToEvent()` now uses direct attribute selector: `.card_feed_item[data-event-slug="{slug}"]` (same pattern as filter-to-feed in sooon-core.js)
+- `navigateToEvent()` now uses direct attribute selector: `.card_feed_item[data-event-slug="{slug}"]`
 - Removes `is-locked` class before scrolling
 - Uses `behavior: 'instant'` + `block: 'start'` to work with scroll-snap
 - Verifies scroll position after 200ms, retries once if missed
@@ -505,6 +554,19 @@ audioObserver threshold = 0.6 (60% visible)
 
 **Solution:** Always use commit hash in script URLs (e.g., `@a0ee3f2`) instead of `@main`. Commit hash URLs are immutable and always serve the correct version.
 
+### ✅ RESOLVED: Bookmarks DOM + Slug Targeting (2026-02-19)
+**Problems:**
+1. Favourites list DOM targeting incorrect (wrong container/list selectors)
+2. Slug extraction misaligned with actual Webflow DOM structure
+3. Feed card bookmark indicator dot not showing on page load
+
+**Solutions:**
+- Scoped template search inside `.stacked-list2_list`, empty state as sibling in container
+- Slug extracted from `[data-event-slug-source="true"]` or `[data-feed-slug="true"]` textContent
+- `updateFeedIndicators()` iterates `.card_feed_item` and finds `.bookmark-indicator` dot per card
+
+**Commits:** `6aafa1d`, `90efc3e`, `5d9d103`
+
 ---
 
 ## Important File Paths
@@ -513,9 +575,10 @@ audioObserver threshold = 0.6 (60% visible)
 sooon-new-scripts/
 ├── scripts/
 │   ├── PROJECT.md              ← This file (Claude's context)
-│   ├── sooon-critical.js       ← NEW: Intro screen only (blocking, ~80 lines)
-│   ├── sooon-core.js           ← NEW: Feed/audio/modals/filters (deferred, ~400 lines)
-│   ├── event-features.js       ← NEW: Combined share+map+calendar (deferred, ~640 lines)
+│   ├── sooon-critical.js       ← Intro screen only (blocking, ~100 lines)
+│   ├── sooon-core.js           ← Feed/audio/modals/filters (deferred, ~400 lines)
+│   ├── event-features.js       ← Combined share+map+calendar (deferred, ~580 lines)
+│   ├── sooon-bookmarks.js      ← Bookmarks + favourites list (deferred, ~360 lines)
 │   ├── sooon-footer.js         ← DEPRECATED: replaced by critical + core
 │   ├── event-share.js          ← DEPRECATED: merged into event-features.js
 │   ├── venue-map.js            ← DEPRECATED: merged into event-features.js
@@ -523,15 +586,48 @@ sooon-new-scripts/
 │   ├── sooon-head.js           ← Empty (not in use)
 │   ├── sooon-styles.css        ← Custom styles
 │   └── test.js                 ← Testing (not in production)
-├── PROJECT-HANDOFF.md          ← Detailed handoff docs
-├── SIMPLE-TEST-GUIDE.md        ← Testing instructions
-├── diagnostic-deep-link.js     ← Diagnostic tool
 └── README.md                   ← Basic repo info
 ```
 
 ---
 
+## Console Log Prefixes
+
+| Prefix | Script |
+|---|---|
+| `[Critical]` | sooon-critical.js |
+| `[Core]` | sooon-core.js |
+| `[Event Share]` | event-features.js (share + deep link) |
+| `[Venue Map]` | event-features.js (map) |
+| `[Calendar Export]` | event-features.js (calendar) |
+| `[Bookmarks]` | sooon-bookmarks.js |
+
+### Expected deep link console output (first-time visitor):
+```
+[Critical] Deep link detected, first visit - skipping intro, audio OFF
+[Core] Feed initialization complete, ready for deep links
+[Event Share] Deep link detected, slug: 2026-01-16-baze-le-singe-37a80
+[Event Share] Waiting for feed initialization...
+[Event Share] Feed ready, navigating to event
+[Event Share] Navigation attempt 1/3
+[Event Share] Found target card, scrolling...
+[Event Share] Scroll successful, card in viewport
+[Event Share] Hash cleared
+```
+
+---
+
 ## Testing Checklist
+
+### Bookmarks Feature
+- [ ] Click bookmark button in modal — icon switches to active state
+- [ ] Close and reopen modal — icon persists (from localStorage)
+- [ ] Feed card dot indicator shows for bookmarked events on page load
+- [ ] Favourites list populates with bookmarked events
+- [ ] Empty state shown when no bookmarks
+- [ ] Bookmark removed: icon reverts, dot hides, favourites list updates
+- [ ] Works across multiple events
+- [ ] Persists after page refresh
 
 ### Event Share Feature
 - [ ] Click share button on different events
@@ -549,7 +645,6 @@ sooon-new-scripts/
 - [ ] Feed scroll works normally after navigation (not locked)
 - [ ] Hash is removed after navigation
 - [ ] Works on slow connections (retry logic with feed ready wait)
-- [ ] Console shows: `[Critical] Deep link detected...` → `[Core] Feed initialization complete...` → `[Event Share] Feed ready...` → `[Event Share] Scroll successful...`
 - [ ] Returning visitor with deep link: uses saved audio preference, skips intro
 - [ ] Regular first visitor (no deep link): sees intro, audio ON
 
@@ -558,21 +653,13 @@ sooon-new-scripts/
 - [ ] Verify correct venue + city extracted (not first event)
 - [ ] Google Maps opens in new tab with correct search query
 - [ ] Works when city is missing (venue-only query)
-- [ ] Test on iOS Safari (opens Maps app or Google Maps)
-- [ ] Test on desktop (opens Google Maps in browser)
 
 ### Calendar Export Feature
 - [ ] Click calendar button on different events
 - [ ] Verify correct data extracted (artist, venue, city, date, slug)
 - [ ] .ics file downloads with correct filename (event-{slug}.ics)
 - [ ] Calendar app opens/imports the .ics file
-- [ ] Event title format: "{artist} live at {venue}"
-- [ ] Location field: "{venue}, {city}"
-- [ ] Description includes all artists joined with +
-- [ ] Start time defaults to 20:00, end 23:00
 - [ ] Multi-artist events show all artists in description
-- [ ] Works on iOS Safari (primary)
-- [ ] Works on desktop browsers
 
 ### Audio Functionality
 - [ ] Audio plays on scroll (60% visibility)
@@ -580,7 +667,6 @@ sooon-new-scripts/
 - [ ] Audio toggle works (intro + feed buttons)
 - [ ] State persists in localStorage
 - [ ] Multi-artist switching works
-- [ ] Audio respects onboarding flow
 - [ ] iOS audio unlock works on first tap
 
 ### Filter & Navigation
@@ -590,36 +676,16 @@ sooon-new-scripts/
 - [ ] Filter closes after selection
 - [ ] Result counts update correctly
 
-### Modal Behavior
-- [ ] Modal opens on card click
-- [ ] Background scroll locked
-- [ ] Modal closes on X button
-- [ ] Correct event data shown
-- [ ] Share button works from modal
-
 ### Performance
 - [ ] Intro screen interactive in <2 seconds
-- [ ] sooon-critical.js loads and runs before deferred scripts
-- [ ] Feed ready when user clicks "Discover Shows"
-- [ ] First 3 cards load eagerly
-- [ ] Remaining cards lazy load
-- [ ] Images/videos defer correctly
-- [ ] Lazy load triggers at 200% rootMargin
+- [ ] First 3 cards load eagerly, rest lazy load
 - [ ] No jank on fast scrolling
-
-### Cross-Browser Testing
-- [ ] iOS Safari (primary)
-- [ ] Chrome mobile
-- [ ] Desktop Safari
-- [ ] Desktop Chrome
 
 ---
 
 ## Next Priorities
 
-*Update this section when starting new work*
-
-**Current Status (2026-02-16):**
+**Current Status (2026-02-19):**
 - ✅ Event share fully working
 - ✅ Deep link navigation with feed-ready synchronization
 - ✅ Deep link first-visit handling (skip intro, audio OFF)
@@ -629,10 +695,10 @@ sooon-new-scripts/
 - ✅ Calendar export (.ics download) working
 - ✅ Scripts split into 3-tier loading for fast intro screen
 - ✅ Cross-script coordination via `window.sooonFeedReady` flag
+- ✅ Bookmarks with localStorage persistence + favourites list
 - 🔄 Ready for new features
 
 **Planned Enhancements:**
-- Bookmarking feature
 - Integration of further info via .json endpoint and make.com automation
 - Better UX (animation, interaction, etc.)
 - More specific filters
@@ -647,7 +713,7 @@ sooon-new-scripts/
 3. Does it need CMS data? Which fields?
 4. Mobile vs. desktop considerations
 5. Browser compatibility requirements (iOS Safari restrictions?)
-6. Impact on existing features (audio, modals, filters, etc.)
+6. Impact on existing features (audio, modals, filters, bookmarks, etc.)
 7. Console logging strategy (use `[Script Name]` prefix)
 8. localStorage keys needed?
 9. Finsweet attribute interactions?
@@ -665,33 +731,11 @@ sooon-new-scripts/
 - Modal scroll lock interactions
 - Audio state synchronization (multiple UI elements)
 - Multi-artist card complexity
-
-**Performance Considerations:**
-- Asset loading strategy (eager vs lazy)
-- IntersectionObserver thresholds
-- Event delegation vs direct listeners
-- localStorage reads/writes
-- Query selector performance
-- Scroll event handling
+- **Slug sources differ by context** — modal uses `[data-event-slug-source="true"]`, feed cards use that or `[data-feed-slug="true"]`
+- **MutationObserver scope** — bookmark button state only syncs when modal has `.is-open`; page-load state goes through `updateFeedIndicators()`
 
 ---
 
-## Questions to Ask User
-
-When starting fresh chat for new features:
-1. Which script should this modify? (or create new?)
-2. What Webflow elements exist? (selectors, structure, Webflow IX?)
-3. What CMS fields are available?
-4. Are there Finsweet attributes in use?
-5. Mobile or desktop priority?
-6. Any existing similar functionality to reference?
-7. Should this be in production immediately or staged?
-8. Does it interact with audio system?
-9. Does it need scroll lock or modal handling?
-10. localStorage persistence needed?
-
----
-
-**Document Version:** 5.1
+**Document Version:** 5.2
 **Maintained By:** DanNessler + Claude
-**Last Verified Working:** 2026-02-16
+**Last Verified Working:** 2026-02-19
