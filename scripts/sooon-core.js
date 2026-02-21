@@ -566,18 +566,28 @@ document.addEventListener("DOMContentLoaded", () => {
 // ========================================================
 // CARD FEED EMPTY STATE — Scroll to top when no results
 // ========================================================
-(function() {
-  window.fsAttributes = window.fsAttributes || [];
-  window.fsAttributes.push(['list', function(listInstances) {
-    var eventsList = listInstances.find(function(i) { return i.id === 'events'; });
-    if (!eventsList) return;
+document.addEventListener('DOMContentLoaded', function() {
+  var feedWrapper = document.querySelector('.card_feed-wrapper');
+  if (!feedWrapper) return;
 
-    eventsList.on('renderitems', function(renderedItems) {
-      if (renderedItems.length === 0) {
-        var feedWrapper = document.querySelector('.card_feed-wrapper');
-        if (feedWrapper) feedWrapper.scrollTop = 0;
-        console.log('[Core] Filter: 0 results — scrolled feed to top for empty state');
-      }
-    });
-  }]);
-})();
+  // Empty state may be inside feedWrapper or a sibling under the fs-list-instance parent
+  var listParent = feedWrapper.closest('[fs-list-instance="events"]') || feedWrapper.parentElement || feedWrapper;
+  var emptyEl = listParent.querySelector('[fs-list-element="empty"]');
+
+  if (!emptyEl) {
+    console.log('[Core] Card feed empty state element not found');
+    return;
+  }
+
+  console.log('[Core] Empty state watcher active');
+
+  // When Finsweet shows the empty state, scroll the snap container to top
+  // so the empty state is actually in view (otherwise the container stays
+  // at its previous scroll position, showing black space)
+  new MutationObserver(function() {
+    if (window.getComputedStyle(emptyEl).display !== 'none') {
+      feedWrapper.scrollTop = 0;
+      console.log('[Core] Filter: 0 results — scrolled feed to top');
+    }
+  }).observe(emptyEl, { attributes: true, attributeFilter: ['style', 'class'] });
+});
