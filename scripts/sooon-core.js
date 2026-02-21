@@ -584,9 +584,9 @@ document.addEventListener('DOMContentLoaded', function() {
     clearTimeout(syncTimeout);
     syncTimeout = setTimeout(function() {
       var allItems = listEl.querySelectorAll('.card_feed_item');
-      if (!allItems.length) return;
 
-      var hasResults = Array.from(allItems).some(function(item) {
+      // 0 items = Finsweet removed them all from DOM (not just display:none)
+      var hasResults = allItems.length > 0 && Array.from(allItems).some(function(item) {
         return window.getComputedStyle(item).display !== 'none';
       });
 
@@ -600,6 +600,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   new MutationObserver(syncEmptyState).observe(listEl, {
     subtree: true,
+    childList: true,          // Finsweet removes items from DOM — not just display:none
     attributes: true,
     attributeFilter: ['style']
   });
