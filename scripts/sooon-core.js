@@ -561,3 +561,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const checked = document.querySelector('input[name="date-quick"]:checked');
   if (checked) checked.dispatchEvent(new Event("change", { bubbles: true }));
 });
+
+
+// ========================================================
+// CARD FEED EMPTY STATE — Scroll to top when no results
+// ========================================================
+(function() {
+  window.fsAttributes = window.fsAttributes || [];
+  window.fsAttributes.push(['list', function(listInstances) {
+    var eventsList = listInstances.find(function(i) { return i.id === 'events'; });
+    if (!eventsList) return;
+
+    eventsList.on('renderitems', function(renderedItems) {
+      if (renderedItems.length === 0) {
+        var feedWrapper = document.querySelector('.card_feed-wrapper');
+        if (feedWrapper) feedWrapper.scrollTop = 0;
+        console.log('[Core] Filter: 0 results — scrolled feed to top for empty state');
+      }
+    });
+  }]);
+})();
