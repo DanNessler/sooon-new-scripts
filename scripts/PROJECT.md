@@ -567,6 +567,25 @@ audioObserver threshold = 0.6 (60% visible)
 
 **Commits:** `6aafa1d`, `90efc3e`, `5d9d103`
 
+### ✅ RESOLVED: Card Feed Empty State Not Showing on 0 Filter Results (2026-02-21)
+**Problem:** Card Feed showed blank black screen when filters returned 0 results. Empty state element existed but was invisible. Stacked List empty state worked correctly.
+
+**Root Causes (discovered via diagnostic):**
+1. **DOM position**: The `[fs-list-element="empty"]` element is a sibling of `.card_feed-wrapper` (outside the scroll container), inside `SECTION.card_feed`. `.card_feed-wrapper` stacks on top of it, obscuring it.
+2. **Finsweet doesn't manage it via style**: The empty state had `display: flex` from CSS at all times — Finsweet never set an inline style on it, so MutationObserver watching `style`/`class` never fired.
+3. **Finsweet removes items from DOM**: Finsweet v2 removes filtered-out `.card_feed_item` elements from the DOM entirely (not `display: none`). `.card_feed_item count: 0` and `.w-dyn-item count: 0` after filtering confirmed this.
+
+**Solutions:**
+- **Webflow (CSS):** Empty state element given `height: 100vh` + flex centering so it fills the viewport when visible.
+- **sooon-core.js (JS):** MutationObserver on `[fs-list-element="list"]` with `childList: true` (catches DOM removals). When `querySelectorAll('.card_feed_item').length === 0`, hides `.card_feed-wrapper` via `display: none`, revealing the empty state sibling behind it. Debounced 50ms. Restores wrapper when items return.
+
+**Key Finsweet v2 behaviour learned:**
+- Finsweet removes items from the DOM when filtered out — does NOT use `display: none` on items
+- `fsAttributes` `renderitems` event does not reliably fire for connected list instances
+- The `[fs-list-element="empty"]` element must be styled independently; Finsweet may not manage its visibility if the DOM structure doesn't match expectations
+
+**Commits:** `f7fe93b`, `af8de55`, `a2f69a3`, `5ce3e36`
+
 ---
 
 ## Important File Paths
@@ -685,7 +704,7 @@ sooon-new-scripts/
 
 ## Next Priorities
 
-**Current Status (2026-02-19):**
+**Current Status (2026-02-21):**
 - ✅ Event share fully working
 - ✅ Deep link navigation with feed-ready synchronization
 - ✅ Deep link first-visit handling (skip intro, audio OFF)
@@ -696,6 +715,7 @@ sooon-new-scripts/
 - ✅ Scripts split into 3-tier loading for fast intro screen
 - ✅ Cross-script coordination via `window.sooonFeedReady` flag
 - ✅ Bookmarks with localStorage persistence + favourites list
+- ✅ Card feed empty state shows correctly on 0 filter results
 - 🔄 Ready for new features
 
 **Planned Enhancements:**
@@ -733,9 +753,11 @@ sooon-new-scripts/
 - Multi-artist card complexity
 - **Slug sources differ by context** — modal uses `[data-event-slug-source="true"]`, feed cards use that or `[data-feed-slug="true"]`
 - **MutationObserver scope** — bookmark button state only syncs when modal has `.is-open`; page-load state goes through `updateFeedIndicators()`
+- **Finsweet v2 removes items from DOM** — does NOT set `display: none` on filtered items. Use `childList: true` in MutationObserver to detect removals. `fsAttributes` `renderitems` event is unreliable for connected list instances.
+- **Snap-scroll containers obscure siblings** — elements outside `.card_feed-wrapper` but inside the same section are hidden behind the wrapper. Empty states or overlays must be managed via JS (hide the wrapper) or CSS z-index.
 
 ---
 
-**Document Version:** 5.2
+**Document Version:** 5.3
 **Maintained By:** DanNessler + Claude
-**Last Verified Working:** 2026-02-19
+**Last Verified Working:** 2026-02-21
