@@ -564,30 +564,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 // ========================================================
-// CARD FEED EMPTY STATE — Scroll to top when no results
+// CARD FEED EMPTY STATE — JS-managed visibility
+// The empty state is a sibling of .card_feed-wrapper (outside the
+// scroll container), so Finsweet can't reveal it through the wrapper.
+// We watch card items for Finsweet's display:none toggling and hide
+// the wrapper when 0 results, letting the empty state show through.
 // ========================================================
 document.addEventListener('DOMContentLoaded', function() {
   var feedWrapper = document.querySelector('.card_feed-wrapper');
   if (!feedWrapper) return;
 
-  // Empty state may be inside feedWrapper or a sibling under the fs-list-instance parent
-  var listParent = feedWrapper.closest('[fs-list-instance="events"]') || feedWrapper.parentElement || feedWrapper;
-  var emptyEl = listParent.querySelector('[fs-list-element="empty"]');
+  var listEl = feedWrapper.querySelector('[fs-list-element="list"]');
+  if (!listEl) return;
 
-  if (!emptyEl) {
-    console.log('[Core] Card feed empty state element not found');
-    return;
+  console.log('[Core] Card feed empty state: JS-managed');
+
+  var syncTimeout;
+  function syncEmptyState() {
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(function() {
+      var allItems = listEl.querySelectorAll('.card_feed_item');
+      if (!allItems.length) return;
+
+      var hasResults = Array.from(allItems).some(function(item) {
+        return window.getComputedStyle(item).display !== 'none';
+      });
+
+      feedWrapper.style.display = hasResults ? '' : 'none';
+
+      if (!hasResults) {
+        console.log('[Core] Filter: 0 results — feed hidden, empty state visible');
+      }
+    }, 50);
   }
 
-  console.log('[Core] Empty state watcher active');
-
-  // When Finsweet shows the empty state, scroll the snap container to top
-  // so the empty state is actually in view (otherwise the container stays
-  // at its previous scroll position, showing black space)
-  new MutationObserver(function() {
-    if (window.getComputedStyle(emptyEl).display !== 'none') {
-      feedWrapper.scrollTop = 0;
-      console.log('[Core] Filter: 0 results — scrolled feed to top');
-    }
-  }).observe(emptyEl, { attributes: true, attributeFilter: ['style', 'class'] });
+  new MutationObserver(syncEmptyState).observe(listEl, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['style']
+  });
 });
