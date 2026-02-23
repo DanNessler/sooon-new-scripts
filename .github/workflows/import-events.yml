@@ -1,0 +1,28 @@
+name: Import Events to Webflow
+
+on:
+  # Run every day at 6 AM UTC
+  schedule:
+    - cron: '0 6 * * *'
+
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  import:
+    name: Import events
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run event importer
+        env:
+          WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
+        run: node scripts/import-events.js
