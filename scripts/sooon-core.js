@@ -51,12 +51,12 @@
     });
   }
 
-  // ── Step 3b: Inject audio elements from data-audio-url-* card attributes ──
+  // ── Step 3b: Inject audio + video elements from data-*-url-* card attributes ──
   function injectAudioForCard(card) {
     if (card.dataset.audioInjected === 'true') return;
 
     var slug = card.getAttribute('data-event-slug') || 'unknown';
-    console.log('[Core] Injecting audio for:', slug);
+    console.log('[Core] Injecting assets for:', slug);
 
     for (var i = 1; i <= 3; i++) {
       var audioUrl = card.getAttribute('data-audio-url-' + i);
@@ -68,6 +68,35 @@
       audio.src = audioUrl;
       audio.setAttribute('data-artist-id', String(i));
       card.appendChild(audio);
+    }
+
+    // Video injection for feed cards
+    for (let i = 1; i <= 3; i++) {
+      const videoUrl = card.getAttribute(`data-video-url-${i}`);
+      if (!videoUrl || videoUrl === '') continue;
+
+      const artistVisual = card.querySelector(`.artist-visual[data-artist-id="${i}"]`);
+      if (!artistVisual) {
+        console.warn('[Core] No artist-visual container for artist', i, 'on card:', card.dataset.eventSlug);
+        continue;
+      }
+
+      const video = document.createElement('video');
+      video.className = 'artist-video';
+      video.setAttribute('data-artist-id', String(i));
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.autoplay = false;
+
+      const source = document.createElement('source');
+      source.src = videoUrl;
+      source.type = 'video/mp4';
+
+      video.appendChild(source);
+      artistVisual.appendChild(video);
+
+      console.log('[Core] Video injected for artist', i, 'on card:', card.dataset.eventSlug);
     }
 
     card.dataset.audioInjected = 'true';
@@ -112,6 +141,49 @@
     console.log('[Core] Audio injection observer active for', cards.length, 'cards');
   }
 
+  // ── Filter diagnostics ──
+  function logFilterDiagnostics() {
+    console.log('[Core] === FILTER DIAGNOSTICS ===');
+
+    var allCards = document.querySelectorAll('.card_feed_item');
+    console.log('[Core] Total cards in feed:', allCards.length);
+
+    var cityCounts = {};
+    allCards.forEach(function(card) {
+      var city = card.getAttribute('data-venue-city') || 'unknown';
+      cityCounts[city] = (cityCounts[city] || 0) + 1;
+    });
+    console.log('[Core] Events by city:', cityCounts);
+
+    var slugs = new Set();
+    var duplicateSlugs = [];
+    allCards.forEach(function(card) {
+      var slug = card.dataset.eventSlug || card.getAttribute('data-event-slug');
+      if (slugs.has(slug)) {
+        duplicateSlugs.push(slug);
+      }
+      slugs.add(slug);
+    });
+
+    if (duplicateSlugs.length > 0) {
+      console.warn('[Core] ⚠️ DUPLICATE EVENT SLUGS DETECTED:', duplicateSlugs);
+      console.warn('[Core] This indicates CMS has duplicate entries');
+    } else {
+      console.log('[Core] ✅ No duplicate slugs in feed');
+    }
+
+    var filterListItems = document.querySelectorAll('.stacked-list2_item');
+    if (filterListItems.length > 0) {
+      console.log('[Core] Items in filter list:', filterListItems.length);
+      if (filterListItems.length !== allCards.length) {
+        console.warn('[Core] ⚠️ MISMATCH: Filter list has', filterListItems.length, 'items but feed has', allCards.length);
+        console.warn('[Core] Check Webflow for duplicate collection lists or wrong CMS binding');
+      }
+    }
+
+    console.log('[Core] === END DIAGNOSTICS ===');
+  }
+
   // ── Entry point ──
   function start() {
     waitForCards(function(cards) {
@@ -119,6 +191,7 @@
         init(cards);
         window.sooonFeedReady = true;
         console.log('[Core] Feed initialization complete, ready for deep links');
+        setTimeout(logFilterDiagnostics, 2000);
       }
     });
   }
