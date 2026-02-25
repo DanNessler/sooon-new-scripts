@@ -51,12 +51,12 @@
     });
   }
 
-  // ── Step 3b: Inject audio + video elements from data-*-url-* card attributes ──
+  // ── Step 3b: Inject audio elements from data-audio-url-* card attributes ──
   function injectAudioForCard(card) {
     if (card.dataset.audioInjected === 'true') return;
 
     var slug = card.getAttribute('data-event-slug') || 'unknown';
-    console.log('[Core] Injecting assets for:', slug);
+    console.log('[Core] Injecting audio for:', slug);
 
     for (var i = 1; i <= 3; i++) {
       var audioUrl = card.getAttribute('data-audio-url-' + i);
@@ -68,35 +68,6 @@
       audio.src = audioUrl;
       audio.setAttribute('data-artist-id', String(i));
       card.appendChild(audio);
-    }
-
-    // Video injection for feed cards
-    for (let i = 1; i <= 3; i++) {
-      const videoUrl = card.getAttribute(`data-video-url-${i}`);
-      if (!videoUrl || videoUrl === '') continue;
-
-      const artistVisual = card.querySelector(`.artist-visual[data-artist-id="${i}"]`);
-      if (!artistVisual) {
-        console.warn('[Core] No artist-visual container for artist', i, 'on card:', card.dataset.eventSlug);
-        continue;
-      }
-
-      const video = document.createElement('video');
-      video.className = 'artist-video';
-      video.setAttribute('data-artist-id', String(i));
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.autoplay = false;
-
-      const source = document.createElement('source');
-      source.src = videoUrl;
-      source.type = 'video/mp4';
-
-      video.appendChild(source);
-      artistVisual.appendChild(video);
-
-      console.log('[Core] Video injected for artist', i, 'on card:', card.dataset.eventSlug);
     }
 
     card.dataset.audioInjected = 'true';
