@@ -110,6 +110,22 @@
     });
 
     console.log('[Core] Audio injection observer active for', cards.length, 'cards');
+
+    // Also handle cards added later by sooon-api.js (infinite scroll)
+    var feedEl = (cards[0] && cards[0].parentElement) || document.querySelector('.card_feed');
+    if (feedEl) {
+      new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          mutation.addedNodes.forEach(function(node) {
+            if (node.nodeType !== 1) return;
+            if (node.classList.contains('card_feed_item')) {
+              injectAudioForCard(node);
+              lazyObserver.observe(node);
+            }
+          });
+        });
+      }).observe(feedEl, { childList: true });
+    }
   }
 
   // ── Filter diagnostics ──
@@ -471,6 +487,21 @@ document.addEventListener("DOMContentLoaded", function() {
   }, { threshold: 0.6 });
 
   document.querySelectorAll(config.cardSelector).forEach(card => audioObserver.observe(card));
+
+  // Also observe cards added later by sooon-api.js (infinite scroll)
+  var _feedEl = document.querySelector('.card_feed');
+  if (_feedEl) {
+    new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        mutation.addedNodes.forEach(function(node) {
+          if (node.nodeType !== 1) return;
+          if (node.matches && node.matches(config.cardSelector)) {
+            audioObserver.observe(node);
+          }
+        });
+      });
+    }).observe(_feedEl, { childList: true });
+  }
 
   const unlockAudio = () => {
     if (!canPlayAudioNow()) return;
