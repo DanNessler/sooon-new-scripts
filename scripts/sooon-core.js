@@ -28,6 +28,7 @@
   }
 
   // ── Step 2: Defer images on cards beyond EAGER_CARDS ──
+  // Audio/video are no longer in the template — injected on demand instead.
   function deferCard(card) {
     card.querySelectorAll('img').forEach(function(img) {
       if (img.hasAttribute('data-lazy-processed')) return;
@@ -37,29 +38,9 @@
       img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"%3E%3C/svg%3E';
       img.setAttribute('data-lazy-processed', 'true');
     });
-    card.querySelectorAll('video').forEach(function(video) {
-      if (video.hasAttribute('data-lazy-processed')) return;
-      if (video.src && video.src !== window.location.href) {
-        video.setAttribute('data-src', video.src);
-        video.removeAttribute('src');
-        video.setAttribute('data-lazy-processed', 'true');
-      }
-    });
-    card.querySelectorAll('audio').forEach(function(audio) {
-      if (audio.hasAttribute('data-lazy-processed')) return;
-      var sources = audio.querySelectorAll('source');
-      if (sources.length > 0) {
-        var srcArray = Array.from(sources).map(function(s) { return s.src; });
-        if (srcArray.some(function(s) { return s && s !== ''; })) {
-          audio.setAttribute('data-src', JSON.stringify(srcArray));
-          sources.forEach(function(s) { s.remove(); });
-          audio.setAttribute('data-lazy-processed', 'true');
-        }
-      }
-    });
   }
 
-  // ── Step 3: Load assets back when card enters viewport ──
+  // ── Step 3: Restore deferred images when card enters viewport ──
   function loadCard(card) {
     card.querySelectorAll('img[data-src]').forEach(function(img) {
       var src = img.getAttribute('data-src');
@@ -68,31 +49,28 @@
         img.removeAttribute('data-src');
       }
     });
-    card.querySelectorAll('video[data-src]').forEach(function(video) {
-      var src = video.getAttribute('data-src');
-      if (src) {
-        video.src = src;
-        video.load();
-        video.removeAttribute('data-src');
-      }
-    });
-    card.querySelectorAll('audio[data-src]').forEach(function(audio) {
-      var srcData = audio.getAttribute('data-src');
-      if (srcData) {
-        try {
-          var srcArray = JSON.parse(srcData);
-          srcArray.forEach(function(src) {
-            if (!src) return;
-            var source = document.createElement('source');
-            source.src = src;
-            source.type = 'audio/mpeg';
-            audio.appendChild(source);
-          });
-          audio.load();
-          audio.removeAttribute('data-src');
-        } catch(e) {}
-      }
-    });
+  }
+
+  // ── Step 3b: Inject audio elements from data-audio-url-* card attributes ──
+  function injectAudioForCard(card) {
+    if (card.dataset.audioInjected === 'true') return;
+
+    var slug = card.getAttribute('data-event-slug') || 'unknown';
+    console.log('[Core] Injecting audio for:', slug);
+
+    for (var i = 1; i <= 3; i++) {
+      var audioUrl = card.getAttribute('data-audio-url-' + i);
+      if (!audioUrl || audioUrl === '') continue;
+
+      var audio = document.createElement('audio');
+      audio.className = 'track-audio sooon-audio';
+      audio.preload = 'none';
+      audio.src = audioUrl;
+      audio.setAttribute('data-artist-id', String(i));
+      card.appendChild(audio);
+    }
+
+    card.dataset.audioInjected = 'true';
   }
 
   // ── Step 4: Main init — runs after cards exist ──
@@ -100,25 +78,38 @@
     if (initialized) return;
     initialized = true;
 
+    // Inject audio immediately for first EAGER_CARDS (visible at page load)
+    cards.forEach(function(card, index) {
+      if (index < EAGER_CARDS) {
+        injectAudioForCard(card);
+      }
+    });
+
+    // Defer images for cards beyond EAGER_CARDS
     cards.forEach(function(card, index) {
       if (index < EAGER_CARDS) return;
       deferCard(card);
     });
 
-    var observer = new IntersectionObserver(function(entries) {
+    // Combined observer: restore images + inject audio as cards approach viewport
+    var lazyObserver = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (!entry.isIntersecting) return;
         loadCard(entry.target);
-        observer.unobserve(entry.target);
+        injectAudioForCard(entry.target);
+        lazyObserver.unobserve(entry.target);
       });
     }, {
       rootMargin: LOAD_DISTANCE + ' 0px',
       threshold: 0
     });
 
-    cards.forEach(function(card) {
-      observer.observe(card);
+    cards.forEach(function(card, index) {
+      if (index < EAGER_CARDS) return;
+      lazyObserver.observe(card);
     });
+
+    console.log('[Core] Audio injection observer active for', cards.length, 'cards');
   }
 
   // ── Entry point ──
@@ -470,7 +461,6 @@ document.addEventListener("DOMContentLoaded", function() {
     if (!artistIdAttr) return;
 
     const artistId = parseInt(artistIdAttr);
-    const targetIndex = artistId - 1;
 
     const allTaggedElements = card.querySelectorAll('[data-artist-id]');
     allTaggedElements.forEach(el => {
@@ -494,9 +484,11 @@ document.addEventListener("DOMContentLoaded", function() {
       return;
     }
 
-    if (allAudios[targetIndex]) {
-      allAudios[targetIndex].muted = false;
-      allAudios[targetIndex].play().catch(err => console.error("[Core] Switch error:", err));
+    // Select by data-artist-id so index gaps from missing audio URLs don't break switching
+    const targetAudio = card.querySelector(config.audioSelector + '[data-artist-id="' + artistId + '"]');
+    if (targetAudio) {
+      targetAudio.muted = false;
+      targetAudio.play().catch(err => console.error("[Core] Switch error:", err));
     }
   });
 
