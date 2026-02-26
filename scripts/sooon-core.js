@@ -586,6 +586,11 @@ document.addEventListener("click", function (e) {
   const slug = item.getAttribute("data-target-slug");
   if (!slug) return;
 
+  // Inject card into feed if not yet loaded (hybrid feed support)
+  if (window.sooonHybridFeed) {
+    window.sooonHybridFeed.injectCard(slug);
+  }
+
   requestAnimationFrame(() => {
     const target = document.querySelector('.card_feed_item[data-event-slug="' + CSS.escape(slug) + '"]');
     if (!target) return;
