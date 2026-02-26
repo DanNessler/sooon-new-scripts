@@ -61,6 +61,7 @@
       screen.classList.add('is-hidden');
       window.sooonIntroReady = true;
     } else {
+      screen.style.removeProperty('display'); // Clear any Webflow inline display:none
       screen.classList.remove('is-hidden');
       document.body.classList.add('is-locked');
     }

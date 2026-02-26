@@ -1,8 +1,12 @@
 // Scroll lock cleanup — removes stale is-locked class on page load for returning visitors
 (function () {
-  if (localStorage.getItem('sooon_onboarding_seen') === '1') {
-    document.body.classList.remove('is-locked');
+  function removeLockIfSeen() {
+    if (document.body && localStorage.getItem('sooon_onboarding_seen') === '1') {
+      document.body.classList.remove('is-locked');
+    }
   }
+  removeLockIfSeen(); // Run immediately (covers footer-injected script)
+  document.addEventListener('DOMContentLoaded', removeLockIfSeen); // Fallback if body not ready yet
 })();
 
 //  CUSTOM page based before-body code inject
@@ -334,6 +338,7 @@ document.addEventListener('click', function(e) {
 
   const showOnboarding = () => {
     if (!onboardingScreen) return;
+    onboardingScreen.style.removeProperty('display'); // Clear any Webflow inline display:none
     onboardingScreen.classList.remove("is-hidden");
     document.body.classList.add("is-locked");
     updateAudioUI();
@@ -350,6 +355,9 @@ document.addEventListener('click', function(e) {
   if (onboardingScreen) {
     if (getSeen()) hideOnboarding();
     else showOnboarding();
+  } else if (getSeen()) {
+    // Returning visitor but intro screen element not found — remove any stale lock
+    document.body.classList.remove('is-locked');
   }
 
   // ========================================================
