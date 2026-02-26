@@ -219,19 +219,20 @@
   }
 
   function setupScrollFallback() {
-    // Determine the actual scroll container:
-    // - If .card_feed scrolls internally, listen on it
-    // - Otherwise listen on window
+    // Walk up the DOM from .card_feed to find the actual scroll container.
+    // (.card_feed is overflow:visible; .card_feed-wrapper above it is overflow:auto)
     var scrollTarget = window;
-    if (feedContainer) {
-      var fcs = window.getComputedStyle(feedContainer);
-      if (fcs.overflowY === 'scroll' || fcs.overflowY === 'auto') {
-        scrollTarget = feedContainer;
-        console.log('[Hybrid] Scroll fallback: listening on .card_feed (internal scroll)');
-      } else {
-        console.log('[Hybrid] Scroll fallback: listening on window');
+    var el = feedContainer;
+    while (el && el !== document.body) {
+      var cs = window.getComputedStyle(el);
+      if (cs.overflowY === 'scroll' || cs.overflowY === 'auto') {
+        scrollTarget = el;
+        break;
       }
+      el = el.parentElement;
     }
+    console.log('[Hybrid] Scroll fallback: listening on',
+                scrollTarget === window ? 'window' : ('.' + (scrollTarget.className || 'element')));
 
     var fallbackFired = false;
     scrollTarget.addEventListener('scroll', function () {
