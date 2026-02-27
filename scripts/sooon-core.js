@@ -14,6 +14,45 @@
   const LOAD_DISTANCE = '200%';
   let initialized = false;
 
+  /**
+   * Ensures inner scroll container exists for injected cards.
+   * Creates .card_feed-scroll-inner if missing, moves CMS list inside.
+   * @returns {HTMLElement|null} The inner container element
+   */
+  function ensureScrollInnerContainer() {
+    var wrapper = document.querySelector('.card_feed-wrapper');
+    if (!wrapper) {
+      console.log('[Core] card_feed-wrapper not found');
+      return null;
+    }
+
+    // Check if inner container already exists
+    var inner = wrapper.querySelector('.card_feed-scroll-inner');
+    if (inner) {
+      return inner;
+    }
+
+    // Create inner container
+    inner = document.createElement('div');
+    inner.className = 'card_feed-scroll-inner';
+    inner.style.cssText = 'min-height: 100vh; width: 100%;';
+
+    // Move ALL existing children into inner container
+    var existingChildren = Array.from(wrapper.children);
+    existingChildren.forEach(function(child) {
+      inner.appendChild(child);
+    });
+
+    // Add inner container to wrapper
+    wrapper.appendChild(inner);
+
+    console.log('[Core] Created scroll inner container, moved', existingChildren.length, 'existing elements');
+    return inner;
+  }
+
+  // Expose globally so sooon-hybrid-feed.js and sooon-api.js can inject into the right container
+  window.sooonEnsureScrollInner = ensureScrollInnerContainer;
+
   // ── Step 1: Wait for Webflow CMS to finish populating cards ──
   function waitForCards(callback) {
     let attempts = 0;
@@ -77,6 +116,9 @@
   function init(cards) {
     if (initialized) return;
     initialized = true;
+
+    // Create inner container before any card injection
+    ensureScrollInnerContainer();
 
     // Inject audio immediately for first EAGER_CARDS (visible at page load)
     cards.forEach(function(card, index) {
