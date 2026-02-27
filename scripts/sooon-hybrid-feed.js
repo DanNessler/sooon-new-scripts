@@ -27,6 +27,80 @@
   var feedContainer = null;
   var sentinel      = null;
   var cardObserver  = null;
+  var apiEvents     = {};   // slug → event.data fetched from API
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // API HELPERS — fetch event data (images, audio) from backend
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  function fetchApiEvents() {
+    fetch('https://beta.sooon.live/api/feed.json')
+      .then(function(res) { return res.json(); })
+      .then(function(events) {
+        if (!Array.isArray(events)) return;
+        events.forEach(function(event) {
+          if (event && event.data && event.data.slug) {
+            apiEvents[event.data.slug] = event.data;
+          }
+        });
+        console.log('[Hybrid] API events loaded:', Object.keys(apiEvents).length, 'events');
+      })
+      .catch(function(err) {
+        console.warn('[Hybrid] API fetch failed — images will use template fallback:', err.message);
+      });
+  }
+
+  function formatEventDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      var date = new Date(dateStr + 'T00:00:00');
+      var options = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+      return date.toLocaleDateString('en-GB', options);
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  /**
+   * Applies API-sourced images (and optionally audio/video) to a cloned card.
+   * Images use immediate src (not data-src) for instant display.
+   * Called after replaceCardData() so it can also override audio data-src.
+   */
+  function updateCardImages(card, eventData) {
+    if (!eventData || !Array.isArray(eventData.artists)) return;
+    eventData.artists.forEach(function(artist, index) {
+      if (index >= 3) return;
+      var artistId = index + 1;
+      var selector = '[data-artist-id="' + artistId + '"]';
+
+      // Artist image — set src immediately (never data-src)
+      var imgEl = card.querySelector(selector + ' .artist-visual img');
+      if (imgEl && artist.image && artist.image.src) {
+        imgEl.src = artist.image.src;
+        if (artist.image.srcSet) imgEl.srcset = artist.image.srcSet;
+        imgEl.removeAttribute('data-src');
+      }
+
+      // Audio — update data-audio-url-N on the card root so injectAudioForCard() picks it up
+      if (artist.featuredTrack && artist.featuredTrack.previewUrl) {
+        card.setAttribute('data-audio-url-' + artistId, artist.featuredTrack.previewUrl);
+      }
+
+      // Video (optional)
+      if (artist.featuredMusicVideo && artist.featuredMusicVideo.previewUrl) {
+        var videoEl = card.querySelector(selector + ' video');
+        if (videoEl) {
+          videoEl.src = artist.featuredMusicVideo.previewUrl;
+          if (artist.featuredMusicVideo.hlsPreviewUrl && !videoEl.querySelector('source[type="application/x-mpegURL"]')) {
+            var source = document.createElement('source');
+            source.src = artist.featuredMusicVideo.hlsPreviewUrl;
+            source.type = 'application/x-mpegURL';
+            videoEl.appendChild(source);
+          }
+        }
+      }
+    });
+  }
 
   // ──────────────────────────────────────────────────────────────────────────────
   // DIAGNOSTICS
@@ -158,6 +232,7 @@
       filterItems.push(el);
     });
     console.log('[Hybrid] Filter items indexed:', filterItems.length);
+    fetchApiEvents();
 
     if (!filterItems.length) {
       console.warn('[Hybrid] ⚠ No filter items found — infinite scroll disabled');
@@ -369,6 +444,16 @@
     clone.querySelectorAll('audio').forEach(function (el) { el.remove(); });
     clone.removeAttribute('data-audio-injected');
     replaceCardData(clone, filterItem);
+
+    // Apply API image data (images, correct audio URLs, optional video)
+    var slug = filterItem.getAttribute('data-target-slug');
+    if (slug && apiEvents[slug]) {
+      updateCardImages(clone, apiEvents[slug]);
+      console.log('[Hybrid] Applied API media for:', slug);
+    } else {
+      console.warn('[Hybrid] No API data for slug:', slug, '— images use template fallback');
+    }
+
     return clone;
   }
 
@@ -426,7 +511,7 @@
     if (cityEl) cityEl.textContent = city;
 
     var dateEl = clone.querySelector('.date_detailed');
-    if (dateEl) dateEl.textContent = date;
+    if (dateEl) dateEl.textContent = formatEventDate(date) || date;
 
     // ── Ticket links ──
     if (ticket) {

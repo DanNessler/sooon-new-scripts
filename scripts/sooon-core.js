@@ -180,6 +180,7 @@
               injectAudioForCard(node);
               lazyObserver.observe(node);
               if (window.sooonAudioObserver) window.sooonAudioObserver.observe(node);
+              if (window.sooonObserveCardAnimations) window.sooonObserveCardAnimations(node);
             }
           });
         });
@@ -522,6 +523,15 @@ document.addEventListener("DOMContentLoaded", function() {
     const exit = parseInt(el.getAttribute('data-exit-threshold')) || config.defaultExitThreshold;
     getObserver(exit).observe(el);
   });
+
+  // Expose for cards injected after initial load (hybrid feed, infinite scroll)
+  window.sooonObserveCardAnimations = function(card) {
+    card.querySelectorAll(config.animTrigger).forEach(function(el) {
+      el.classList.add(config.classIn);
+      var exit = parseInt(el.getAttribute('data-exit-threshold')) || config.defaultExitThreshold;
+      getObserver(exit).observe(el);
+    });
+  };
 
   // ========================================================
   // AUDIO OBSERVER (gated by onboarding + audio state)
