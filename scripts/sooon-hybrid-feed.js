@@ -202,7 +202,9 @@
 
   function observeLastCard() {
     if (!cardObserver) return;
-    var cards = feedContainer.querySelectorAll('.card_feed_item');
+    // Search inner container (cards injected beyond eager load) or fall back to feed container
+    var _searchRoot = document.querySelector('.card_feed-scroll-inner') || feedContainer;
+    var cards = _searchRoot.querySelectorAll('.card_feed_item');
     if (!cards.length) return;
 
     var last = cards[cards.length - 1];
@@ -295,16 +297,19 @@
       card.removeAttribute('style'); // Remove any Finsweet-added styles
 
       console.log('[Hybrid] Card prepared with anti-Finsweet attributes');
-      console.log('[Hybrid] About to append card to:', feedContainer);
-      console.log('[Hybrid] Feed container class:', feedContainer.className);
+      var _injectTarget = window.sooonEnsureScrollInner ? window.sooonEnsureScrollInner() : null;
+      var _injectEl = _injectTarget || feedContainer;
+      console.log('[Hybrid] About to append card to:', _injectEl);
+      console.log('[Hybrid] Feed container class:', _injectEl.className);
       console.log('[Hybrid] Card to append:', card);
 
-      feedContainer.appendChild(card);
+      _injectEl.appendChild(card);
       currentIndex++;
 
       // IMMEDIATE VERIFICATION
       var countNow = document.querySelectorAll('.card_feed_item').length;
-      var countInContainer = feedContainer.querySelectorAll('.card_feed_item').length;
+      var _searchRoot = document.querySelector('.card_feed-scroll-inner') || feedContainer;
+      var countInContainer = _searchRoot.querySelectorAll('.card_feed_item').length;
       console.log('[Hybrid] ✓ Card appended');
       console.log('[Hybrid]   Global .card_feed_item count: ' + countNow);
       console.log('[Hybrid]   Inside .card_feed count: ' + countInContainer);

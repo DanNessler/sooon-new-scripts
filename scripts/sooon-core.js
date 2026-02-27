@@ -168,6 +168,24 @@
         });
       }).observe(feedEl, { childList: true });
     }
+
+    // Also handle cards injected directly into .card_feed-scroll-inner by sooon-hybrid-feed.js
+    var innerContainer = document.querySelector('.card_feed-scroll-inner');
+    if (innerContainer) {
+      new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          mutation.addedNodes.forEach(function(node) {
+            if (node.nodeType !== 1) return;
+            if (node.classList.contains('card_feed_item')) {
+              injectAudioForCard(node);
+              lazyObserver.observe(node);
+              if (window.sooonAudioObserver) window.sooonAudioObserver.observe(node);
+            }
+          });
+        });
+      }).observe(innerContainer, { childList: true });
+      console.log('[Core] Inner container observer active for hybrid-injected cards');
+    }
   }
 
   // ── Filter diagnostics ──
@@ -529,6 +547,10 @@ document.addEventListener("DOMContentLoaded", function() {
   }, { threshold: 0.6 });
 
   document.querySelectorAll(config.cardSelector).forEach(card => audioObserver.observe(card));
+
+  // Expose globally so the IIFE inner-container observer (set up after waitForCards) can register
+  // hybrid-injected cards with this observer without needing to re-create it.
+  window.sooonAudioObserver = audioObserver;
 
   // Also observe cards added later by sooon-api.js (infinite scroll)
   var _feedEl = document.querySelector('.card_feed');
