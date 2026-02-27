@@ -288,12 +288,68 @@
     try {
       var card = buildCard(filterItem);
       console.log('[Hybrid] Card built — appending to feed');
+
+      // Mark card as NOT managed by Finsweet
+      card.setAttribute('fs-cmsload-element', 'item');
+      card.setAttribute('data-hybrid-injected', 'true');
+      card.removeAttribute('style'); // Remove any Finsweet-added styles
+
+      console.log('[Hybrid] Card prepared with anti-Finsweet attributes');
+      console.log('[Hybrid] About to append card to:', feedContainer);
+      console.log('[Hybrid] Feed container class:', feedContainer.className);
+      console.log('[Hybrid] Card to append:', card);
+
       feedContainer.appendChild(card);
       currentIndex++;
-      console.log('[Hybrid] ✓ Card appended — feed now has',
-                  document.querySelectorAll('.card_feed_item').length,
-                  'cards | nextIndex:', currentIndex);
+
+      // IMMEDIATE VERIFICATION
+      var countNow = document.querySelectorAll('.card_feed_item').length;
+      var countInContainer = feedContainer.querySelectorAll('.card_feed_item').length;
+      console.log('[Hybrid] ✓ Card appended');
+      console.log('[Hybrid]   Global .card_feed_item count: ' + countNow);
+      console.log('[Hybrid]   Inside .card_feed count: ' + countInContainer);
+      console.log('[Hybrid]   Expected: 6, Got: ' + countNow);
+
+      if (countNow !== currentIndex) {
+        console.error('[Hybrid] ❌ CARD COUNT MISMATCH!');
+        console.error('[Hybrid] Expected ' + currentIndex + ' cards but found ' + countNow);
+        console.error('[Hybrid] Card may have been removed by another script');
+      }
+
+      // DELAYED VERIFICATION (check if card survives 500ms)
+      setTimeout(function() {
+        var countAfter = document.querySelectorAll('.card_feed_item').length;
+        console.log('[Hybrid] Card count after 500ms: ' + countAfter);
+        if (countAfter !== currentIndex) {
+          console.error('[Hybrid] ❌ CARD WAS REMOVED! Count dropped from ' + currentIndex + ' to ' + countAfter);
+          console.error('[Hybrid] Likely culprit: Finsweet CMS Filter or Webflow CMS re-render');
+        } else {
+          console.log('[Hybrid] ✓ Card survived 500ms');
+        }
+      }, 500);
+
+      console.log('[Hybrid] Next index: ' + currentIndex);
       observeLastCard();
+
+      // Watch for card removal
+      var removalWatcher = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
+            for (var i = 0; i < mutation.removedNodes.length; i++) {
+              var removed = mutation.removedNodes[i];
+              if (removed.classList && removed.classList.contains('card_feed_item')) {
+                console.error('[Hybrid] ❌ CARD REMOVED BY: ', mutation.target);
+                console.error('[Hybrid] Removed card:', removed);
+                console.error('[Hybrid] Stack trace:');
+                console.trace();
+              }
+            }
+          }
+        });
+      });
+
+      removalWatcher.observe(feedContainer, { childList: true, subtree: false });
+      console.log('[Hybrid] Removal watcher active on .card_feed');
     } catch (err) {
       console.error('[Hybrid] ✗ Injection error at index', currentIndex, ':', err);
     }
