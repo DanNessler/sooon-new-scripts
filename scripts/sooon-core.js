@@ -14,45 +14,6 @@
   const LOAD_DISTANCE = '200%';
   let initialized = false;
 
-  /**
-   * Ensures inner scroll container exists for injected cards.
-   * Creates .card_feed-scroll-inner if missing, moves CMS list inside.
-   * @returns {HTMLElement|null} The inner container element
-   */
-  function ensureScrollInnerContainer() {
-    var wrapper = document.querySelector('.card_feed-wrapper');
-    if (!wrapper) {
-      console.log('[Core] card_feed-wrapper not found');
-      return null;
-    }
-
-    // Check if inner container already exists
-    var inner = wrapper.querySelector('.card_feed-scroll-inner');
-    if (inner) {
-      return inner;
-    }
-
-    // Create inner container
-    inner = document.createElement('div');
-    inner.className = 'card_feed-scroll-inner';
-    inner.style.cssText = 'min-height: 100vh; width: 100%;';
-
-    // Move ALL existing children into inner container
-    var existingChildren = Array.from(wrapper.children);
-    existingChildren.forEach(function(child) {
-      inner.appendChild(child);
-    });
-
-    // Add inner container to wrapper
-    wrapper.appendChild(inner);
-
-    console.log('[Core] Created scroll inner container, moved', existingChildren.length, 'existing elements');
-    return inner;
-  }
-
-  // Expose globally so other scripts (e.g. sooon-api.js) can inject into the right container
-  window.sooonEnsureScrollInner = ensureScrollInnerContainer;
-
   // ── Step 1: Wait for Webflow CMS to finish populating cards ──
   function waitForCards(callback) {
     let attempts = 0;
@@ -67,7 +28,6 @@
   }
 
   // ── Step 2: Defer images on cards beyond EAGER_CARDS ──
-  // Audio/video are no longer in the template — injected on demand instead.
   function deferCard(card) {
     card.querySelectorAll('img').forEach(function(img) {
       if (img.hasAttribute('data-lazy-processed')) return;
@@ -77,9 +37,29 @@
       img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"%3E%3C/svg%3E';
       img.setAttribute('data-lazy-processed', 'true');
     });
+    card.querySelectorAll('video').forEach(function(video) {
+      if (video.hasAttribute('data-lazy-processed')) return;
+      if (video.src && video.src !== window.location.href) {
+        video.setAttribute('data-src', video.src);
+        video.removeAttribute('src');
+        video.setAttribute('data-lazy-processed', 'true');
+      }
+    });
+    card.querySelectorAll('audio').forEach(function(audio) {
+      if (audio.hasAttribute('data-lazy-processed')) return;
+      var sources = audio.querySelectorAll('source');
+      if (sources.length > 0) {
+        var srcArray = Array.from(sources).map(function(s) { return s.src; });
+        if (srcArray.some(function(s) { return s && s !== ''; })) {
+          audio.setAttribute('data-src', JSON.stringify(srcArray));
+          sources.forEach(function(s) { s.remove(); });
+          audio.setAttribute('data-lazy-processed', 'true');
+        }
+      }
+    });
   }
 
-  // ── Step 3: Restore deferred images when card enters viewport ──
+  // ── Step 3: Load assets back when card enters viewport ──
   function loadCard(card) {
     card.querySelectorAll('img[data-src]').forEach(function(img) {
       var src = img.getAttribute('data-src');
@@ -88,28 +68,31 @@
         img.removeAttribute('data-src');
       }
     });
-  }
-
-  // ── Step 3b: Inject audio elements from data-audio-url-* card attributes ──
-  function injectAudioForCard(card) {
-    if (card.dataset.audioInjected === 'true') return;
-
-    var slug = card.getAttribute('data-event-slug') || 'unknown';
-    console.log('[Core] Injecting audio for:', slug);
-
-    for (var i = 1; i <= 3; i++) {
-      var audioUrl = card.getAttribute('data-audio-url-' + i);
-      if (!audioUrl || audioUrl === '') continue;
-
-      var audio = document.createElement('audio');
-      audio.className = 'track-audio sooon-audio';
-      audio.preload = 'none';
-      audio.src = audioUrl;
-      audio.setAttribute('data-artist-id', String(i));
-      card.appendChild(audio);
-    }
-
-    card.dataset.audioInjected = 'true';
+    card.querySelectorAll('video[data-src]').forEach(function(video) {
+      var src = video.getAttribute('data-src');
+      if (src) {
+        video.src = src;
+        video.load();
+        video.removeAttribute('data-src');
+      }
+    });
+    card.querySelectorAll('audio[data-src]').forEach(function(audio) {
+      var srcData = audio.getAttribute('data-src');
+      if (srcData) {
+        try {
+          var srcArray = JSON.parse(srcData);
+          srcArray.forEach(function(src) {
+            if (!src) return;
+            var source = document.createElement('source');
+            source.src = src;
+            source.type = 'audio/mpeg';
+            audio.appendChild(source);
+          });
+          audio.load();
+          audio.removeAttribute('data-src');
+        } catch(e) {}
+      }
+    });
   }
 
   // ── Step 4: Main init — runs after cards exist ──
@@ -117,118 +100,25 @@
     if (initialized) return;
     initialized = true;
 
-    // Create inner container before any card injection
-    ensureScrollInnerContainer();
-
-    // Inject audio immediately for first EAGER_CARDS (visible at page load)
-    cards.forEach(function(card, index) {
-      if (index < EAGER_CARDS) {
-        injectAudioForCard(card);
-      }
-    });
-
-    // Defer images for cards beyond EAGER_CARDS
     cards.forEach(function(card, index) {
       if (index < EAGER_CARDS) return;
       deferCard(card);
     });
 
-    // Combined observer: restore images + inject audio as cards approach viewport
-    var lazyObserver = new IntersectionObserver(function(entries) {
+    var observer = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (!entry.isIntersecting) return;
         loadCard(entry.target);
-        injectAudioForCard(entry.target);
-        lazyObserver.unobserve(entry.target);
+        observer.unobserve(entry.target);
       });
     }, {
       rootMargin: LOAD_DISTANCE + ' 0px',
       threshold: 0
     });
 
-    cards.forEach(function(card, index) {
-      if (index < EAGER_CARDS) return;
-      lazyObserver.observe(card);
+    cards.forEach(function(card) {
+      observer.observe(card);
     });
-
-    console.log('[Core] Audio injection observer active for', cards.length, 'cards');
-
-    // Also handle cards added later by sooon-api.js (infinite scroll)
-    var feedEl = (cards[0] && cards[0].parentElement) || document.querySelector('.card_feed');
-    if (feedEl) {
-      new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-          mutation.addedNodes.forEach(function(node) {
-            if (node.nodeType !== 1) return;
-            if (node.classList.contains('card_feed_item')) {
-              injectAudioForCard(node);
-              lazyObserver.observe(node);
-            }
-          });
-        });
-      }).observe(feedEl, { childList: true });
-    }
-
-    // Also handle cards injected directly into .card_feed-scroll-inner by other scripts
-    var innerContainer = document.querySelector('.card_feed-scroll-inner');
-    if (innerContainer) {
-      new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-          mutation.addedNodes.forEach(function(node) {
-            if (node.nodeType !== 1) return;
-            if (node.classList.contains('card_feed_item')) {
-              injectAudioForCard(node);
-              lazyObserver.observe(node);
-              if (window.sooonAudioObserver) window.sooonAudioObserver.observe(node);
-              if (window.sooonObserveCardAnimations) window.sooonObserveCardAnimations(node);
-            }
-          });
-        });
-      }).observe(innerContainer, { childList: true });
-      console.log('[Core] Inner container observer active for hybrid-injected cards');
-    }
-  }
-
-  function logFilterDiagnostics() {
-    console.log('[Core] === FILTER DIAGNOSTICS ===');
-
-    var allCards = document.querySelectorAll('.card_feed_item');
-    console.log('[Core] Total cards in feed:', allCards.length);
-
-    var cityCounts = {};
-    allCards.forEach(function(card) {
-      var city = card.getAttribute('data-venue-city') || 'unknown';
-      cityCounts[city] = (cityCounts[city] || 0) + 1;
-    });
-    console.log('[Core] Events by city:', cityCounts);
-
-    var slugs = new Set();
-    var duplicateSlugs = [];
-    allCards.forEach(function(card) {
-      var slug = card.dataset.eventSlug || card.getAttribute('data-event-slug');
-      if (slugs.has(slug)) {
-        duplicateSlugs.push(slug);
-      }
-      slugs.add(slug);
-    });
-
-    if (duplicateSlugs.length > 0) {
-      console.warn('[Core] ⚠️ DUPLICATE EVENT SLUGS DETECTED:', duplicateSlugs);
-      console.warn('[Core] This indicates CMS has duplicate entries');
-    } else {
-      console.log('[Core] ✅ No duplicate slugs in feed');
-    }
-
-    var filterListItems = document.querySelectorAll('.stacked-list2_item');
-    if (filterListItems.length > 0) {
-      console.log('[Core] Items in filter list:', filterListItems.length);
-      if (filterListItems.length !== allCards.length) {
-        console.warn('[Core] ⚠️ MISMATCH: Filter list has', filterListItems.length, 'items but feed has', allCards.length);
-        console.warn('[Core] Check Webflow for duplicate collection lists or wrong CMS binding');
-      }
-    }
-
-    console.log('[Core] === END DIAGNOSTICS ===');
   }
 
   // ── Entry point ──
@@ -238,7 +128,6 @@
         init(cards);
         window.sooonFeedReady = true;
         console.log('[Core] Feed initialization complete, ready for deep links');
-        setTimeout(logFilterDiagnostics, 2000);
       }
     });
   }
@@ -523,15 +412,6 @@ document.addEventListener("DOMContentLoaded", function() {
     getObserver(exit).observe(el);
   });
 
-  // Expose for cards injected after initial load (hybrid feed, infinite scroll)
-  window.sooonObserveCardAnimations = function(card) {
-    card.querySelectorAll(config.animTrigger).forEach(function(el) {
-      el.classList.add(config.classIn);
-      var exit = parseInt(el.getAttribute('data-exit-threshold')) || config.defaultExitThreshold;
-      getObserver(exit).observe(el);
-    });
-  };
-
   // ========================================================
   // AUDIO OBSERVER (gated by onboarding + audio state)
   // ========================================================
@@ -557,25 +437,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
   document.querySelectorAll(config.cardSelector).forEach(card => audioObserver.observe(card));
 
-  // Expose globally so the IIFE inner-container observer (set up after waitForCards) can register
-  // hybrid-injected cards with this observer without needing to re-create it.
-  window.sooonAudioObserver = audioObserver;
-
-  // Also observe cards added later by sooon-api.js (infinite scroll)
-  var _feedEl = document.querySelector('.card_feed');
-  if (_feedEl) {
-    new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        mutation.addedNodes.forEach(function(node) {
-          if (node.nodeType !== 1) return;
-          if (node.matches && node.matches(config.cardSelector)) {
-            audioObserver.observe(node);
-          }
-        });
-      });
-    }).observe(_feedEl, { childList: true });
-  }
-
   const unlockAudio = () => {
     if (!canPlayAudioNow()) return;
 
@@ -599,22 +460,23 @@ document.addEventListener("DOMContentLoaded", function() {
     const trigger = e.target.closest(config.triggerSelector);
     if (!trigger) return;
 
-    const card = trigger.closest(config.cardSelector) || trigger.closest(config.modalClass);
+    e.preventDefault();
+    e.stopPropagation();
+
+    const card = trigger.closest(config.cardSelector);
     if (!card) return;
 
     const artistIdAttr = trigger.getAttribute('data-artist-id');
     if (!artistIdAttr) return;
 
-    // Guards passed — safe to prevent default and stop propagation
-    e.preventDefault();
-    e.stopPropagation();
-
     const artistId = parseInt(artistIdAttr);
+    const targetIndex = artistId - 1;
 
-    // Visual switching — toggle is-active on all [data-artist-id] elements in scope
-    card.querySelectorAll('[data-artist-id]').forEach(el => {
+    const allTaggedElements = card.querySelectorAll('[data-artist-id]');
+    allTaggedElements.forEach(el => {
       const elId = parseInt(el.getAttribute('data-artist-id'));
       const title = el.querySelector(config.titleSelector);
+
       if (elId === artistId) {
         el.classList.add(config.activeClass);
         if (title) title.classList.add(config.activeClass);
@@ -624,30 +486,17 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     });
 
+    const allAudios = Array.from(card.querySelectorAll(config.audioSelector));
+    allAudios.forEach(a => a.pause());
+
     if (!canPlayAudioNow()) {
       stopAllAudio(false);
       return;
     }
 
-    // Audio scope: modal triggers look up the matching feed card by slug (audio lives there)
-    let audioScope = card;
-    if (!card.matches(config.cardSelector)) {
-      const slug = card.getAttribute('data-event-slug');
-      const feedCard = slug
-        ? document.querySelector(config.cardSelector + '[data-event-slug="' + CSS.escape(slug) + '"]')
-        : null;
-      if (feedCard) audioScope = feedCard;
-    }
-
-    const allAudios = Array.from(audioScope.querySelectorAll(config.audioSelector));
-    allAudios.forEach(a => { a.pause(); a.currentTime = 0; });
-
-    // Prefer lookup by data-artist-id; fall back to position index
-    const targetAudio = audioScope.querySelector(config.audioSelector + '[data-artist-id="' + artistId + '"]')
-      || allAudios[artistId - 1];
-    if (targetAudio) {
-      targetAudio.muted = false;
-      targetAudio.play().catch(() => {});
+    if (allAudios[targetIndex]) {
+      allAudios[targetIndex].muted = false;
+      allAudios[targetIndex].play().catch(err => console.error("[Core] Switch error:", err));
     }
   });
 
@@ -669,11 +518,6 @@ document.addEventListener("click", function (e) {
 
   const slug = item.getAttribute("data-target-slug");
   if (!slug) return;
-
-  // Inject card into feed if not yet loaded (hybrid feed support)
-  if (window.sooonHybridFeed) {
-    window.sooonHybridFeed.injectCard(slug);
-  }
 
   requestAnimationFrame(() => {
     const target = document.querySelector('.card_feed_item[data-event-slug="' + CSS.escape(slug) + '"]');
