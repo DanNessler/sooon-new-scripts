@@ -599,22 +599,22 @@ document.addEventListener("DOMContentLoaded", function() {
     const trigger = e.target.closest(config.triggerSelector);
     if (!trigger) return;
 
-    e.preventDefault();
-    e.stopPropagation();
-
     const card = trigger.closest(config.cardSelector) || trigger.closest(config.modalClass);
     if (!card) return;
 
     const artistIdAttr = trigger.getAttribute('data-artist-id');
     if (!artistIdAttr) return;
 
+    // Guards passed — safe to prevent default and stop propagation
+    e.preventDefault();
+    e.stopPropagation();
+
     const artistId = parseInt(artistIdAttr);
 
-    const allTaggedElements = card.querySelectorAll('[data-artist-id]');
-    allTaggedElements.forEach(el => {
+    // Visual switching — toggle is-active on all [data-artist-id] elements in scope
+    card.querySelectorAll('[data-artist-id]').forEach(el => {
       const elId = parseInt(el.getAttribute('data-artist-id'));
       const title = el.querySelector(config.titleSelector);
-
       if (elId === artistId) {
         el.classList.add(config.activeClass);
         if (title) title.classList.add(config.activeClass);
@@ -624,34 +624,30 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     });
 
-    // When triggered from the modal, audio elements live in the corresponding feed card.
-    // Find the audio scope: prefer the feed card matched by slug, fall back to card itself.
-    let audioScope = card;
-    const isModal = !card.matches(config.cardSelector);
-    if (isModal) {
-      const slug = card.getAttribute('data-event-slug');
-      const feedCard = slug
-        ? document.querySelector(config.cardSelector + '[data-event-slug="' + CSS.escape(slug) + '"]')
-        : null;
-      console.log('[Switcher] modal scope — slug:', slug, '| feed card found:', !!feedCard);
-      if (feedCard) audioScope = feedCard;
-    }
-
-    const allAudios = Array.from(audioScope.querySelectorAll(config.audioSelector));
-    console.log('[Switcher] audio elements in scope:', allAudios.length, '| canPlay:', canPlayAudioNow());
-    allAudios.forEach(a => a.pause());
-
     if (!canPlayAudioNow()) {
       stopAllAudio(false);
       return;
     }
 
-    // Select by data-artist-id so index gaps from missing audio URLs don't break switching
-    const targetAudio = audioScope.querySelector(config.audioSelector + '[data-artist-id="' + artistId + '"]');
-    console.log('[Switcher] target audio for id', artistId, ':', targetAudio);
+    // Audio scope: modal triggers look up the matching feed card by slug (audio lives there)
+    let audioScope = card;
+    if (!card.matches(config.cardSelector)) {
+      const slug = card.getAttribute('data-event-slug');
+      const feedCard = slug
+        ? document.querySelector(config.cardSelector + '[data-event-slug="' + CSS.escape(slug) + '"]')
+        : null;
+      if (feedCard) audioScope = feedCard;
+    }
+
+    const allAudios = Array.from(audioScope.querySelectorAll(config.audioSelector));
+    allAudios.forEach(a => { a.pause(); a.currentTime = 0; });
+
+    // Prefer lookup by data-artist-id; fall back to position index
+    const targetAudio = audioScope.querySelector(config.audioSelector + '[data-artist-id="' + artistId + '"]')
+      || allAudios[artistId - 1];
     if (targetAudio) {
       targetAudio.muted = false;
-      targetAudio.play().catch(err => console.error("[Core] Switch error:", err));
+      targetAudio.play().catch(() => {});
     }
   });
 
