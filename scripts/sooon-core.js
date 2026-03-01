@@ -349,8 +349,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // ========================================================
   // ARTIST SWITCHER
-  // Toggles is-active on .artist-visual and .artist-title elements.
-  // .artist-trigger also carries data-artist-id but is excluded.
+  // Toggles is-active on all [data-artist-id] elements within scope.
+  // Works in both feed cards and event modal.
   // ========================================================
   document.addEventListener('click', function(e) {
     const trigger = e.target.closest(config.triggerSelector);
@@ -359,26 +359,31 @@ document.addEventListener("DOMContentLoaded", function() {
     e.preventDefault();
     e.stopPropagation();
 
-    const card = trigger.closest(config.cardSelector);
-    if (!card) return;
+    const artistId = trigger.getAttribute('data-artist-id');
+    const scope = trigger.closest(config.cardSelector + ', .event_modal_scope');
+    if (!scope || !artistId) return;
 
-    const artistId = parseInt(trigger.getAttribute('data-artist-id'));
-    if (!artistId) return;
+    console.log('[Core] Artist switch:', artistId);
 
-    // Update visual and title active states
-    const selector = config.visualSelector + '[data-artist-id], ' + config.titleSelector + '[data-artist-id]';
-    card.querySelectorAll(selector).forEach(el => {
-      el.classList.toggle(config.activeClass, parseInt(el.getAttribute('data-artist-id')) === artistId);
+    // Toggle is-active on all artist-scoped elements (excludes triggers)
+    scope.querySelectorAll('[data-artist-id].is-active').forEach(el => {
+      el.classList.remove(config.activeClass);
+    });
+    scope.querySelectorAll(`[data-artist-id="${artistId}"]`).forEach(el => {
+      el.classList.add(config.activeClass);
     });
 
     // Switch audio
-    const allAudios = Array.from(card.querySelectorAll(config.audioSelector));
-    allAudios.forEach(a => a.pause());
+    scope.querySelectorAll(config.audioSelector).forEach(a => a.pause());
 
-    if (!canPlayAudioNow()) { stopAllAudio(false); return; }
+    if (!canPlayAudioNow()) return;
 
-    const target = allAudios[artistId - 1];
-    if (target) { target.muted = false; target.play().catch(()=>{}); }
+    const targetAudio = scope.querySelector(`audio[data-artist-id="${artistId}"]`);
+    if (targetAudio) {
+      targetAudio.currentTime = 0;
+      targetAudio.muted = false;
+      targetAudio.play().catch(err => console.log('[Core] Audio play failed:', err));
+    }
   });
 
   console.log('[Core] Feed system initialized');
