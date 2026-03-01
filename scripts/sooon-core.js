@@ -241,35 +241,38 @@
   }
 
   function _processAllCMSCards(originalCards, lazyObserver) {
-    // 1. Clone first card as structural template BEFORE clearing anything.
-    //    Strip audio elements — injectAudioForCard() reinjects from data-audio-url-* attrs.
-    var template = originalCards[0].cloneNode(true);
-    template.querySelectorAll('audio').forEach(function(a) { a.remove(); });
-    template.removeAttribute('data-audio-injected');
+    // Clone each card's own DOM before touching the container — this preserves
+    // Webflow's per-card conditional visibility (display:none inline styles) and
+    // all CMS-resolved attributes exactly as Webflow rendered them.
+    var clones = originalCards.map(function(card) {
+      var clone = card.cloneNode(true);
+      clone.querySelectorAll('audio').forEach(function(a) { a.remove(); });
+      clone.removeAttribute('data-audio-injected');
+      return clone;
+    });
 
-    // 2. Extract all data from original Webflow-rendered cards
-    var allData = originalCards.map(function(card) { return _extractCMSCardData(card); });
-    console.log('[Core] CMS rendering: extracted data for', allData.length, 'cards');
-
-    // 3. Get/create scroll inner container
+    // Get/create scroll inner container
     var innerContainer = ensureScrollInnerContainer();
     if (!innerContainer) {
       console.error('[Core] CMS rendering: could not create scroll container');
       return;
     }
 
-    // 4. Clear existing Webflow-rendered DOM (replaced by cloned cards below)
+    // Clear existing Webflow-rendered DOM (replaced by per-card clones below)
     innerContainer.innerHTML = '';
 
-    // 5. Build and append new cards
+    // Build and append cards — each clone already has correct visibility + CMS data.
+    // We only need to patch things that don't survive the container move: audio attrs
+    // and the background video src (which the template-clone approach was corrupting).
     var built = 0;
-    allData.forEach(function(data, index) {
-      if (!data.slug) {
+    clones.forEach(function(card, index) {
+      var slug = card.querySelector('[data-event-slug-source="true"]') &&
+                 card.querySelector('[data-event-slug-source="true"]').textContent.trim() ||
+                 card.getAttribute('data-event-slug') || '';
+      if (!slug) {
         console.warn('[Core] CMS rendering: no slug at index', index, '— skipped');
         return;
       }
-
-      var card = _buildCMSCard(template, data);
 
       // Eager cards: inject audio immediately
       if (index < EAGER_CARDS) {
@@ -280,164 +283,17 @@
         lazyObserver.observe(card);
       }
 
-      // Audio observer (exposed via window.sooonAudioObserver in DOMContentLoaded)
       if (window.sooonAudioObserver) window.sooonAudioObserver.observe(card);
-
-      // Animation observer (exposed via window.sooonObserveCardAnimations)
       if (window.sooonObserveCardAnimations) window.sooonObserveCardAnimations(card);
 
       innerContainer.appendChild(card);
       built++;
     });
 
-    console.log('[Core] CMS rendering: complete —', built, '/', allData.length, 'cards built');
+    console.log('[Core] CMS rendering: complete —', built, '/', originalCards.length, 'cards built');
     window.sooonFeedReady = true;
     console.log('[Core] Feed initialization complete, ready for deep links');
     setTimeout(logFilterDiagnostics, 2000);
-  }
-
-  /**
-   * Extracts all data from a single Webflow-rendered .card_feed_item.
-   * Artist images come from img[data-artist-id] rendered by HtmlEmbed CMS bindings.
-   * Audio URLs come from audio elements rendered by HtmlEmbed, or data-audio-url-* attrs.
-   */
-  function _extractCMSCardData(card) {
-    var getText = function(sel) {
-      var el = card.querySelector(sel);
-      return el ? el.textContent.trim() : '';
-    };
-    var getImgSrc = function(sel) {
-      var el = card.querySelector(sel);
-      if (!el) return '';
-      // Prefer data-src if image was already deferred
-      return el.getAttribute('data-src') || el.src || '';
-    };
-    var getAudioSrc = function(sel) {
-      var el = card.querySelector(sel);
-      if (!el) return '';
-      return el.getAttribute('src') || el.src || '';
-    };
-    var getTicketLink = function() {
-      var links = card.querySelectorAll('a[href]');
-      for (var i = 0; i < links.length; i++) {
-        var h = links[i].getAttribute('href') || '';
-        if (h && h !== '#' && !h.startsWith('/') && !h.startsWith('javascript')) return h;
-      }
-      return '';
-    };
-
-    return {
-      slug: getText('[data-event-slug-source="true"]') ||
-            getText('[data-feed-slug="true"]') ||
-            card.getAttribute('data-event-slug') || '',
-
-      venueName:  getText('.event_location-venue'),
-      venueCity:  getText('.event_location-city'),
-      date:       getText('.date_detailed'),
-      ticketLink: getTicketLink(),
-
-      // Artists — image from HtmlEmbed-rendered <img data-artist-id="N">,
-      // audio from CMS-bound <audio> or fallback to card data attr
-      artist1Name:  getText('[data-artist-id="1"] .artist-title') || getText('.artist-title.is-active') || getText('.artist-title'),
-      artist1Img:   getImgSrc('img[data-artist-id="1"]') || getImgSrc('[data-artist-id="1"] img'),
-      artist1Audio: card.getAttribute('data-audio-url-1') || getAudioSrc('[data-artist-id="1"] audio') || getAudioSrc('audio.track-audio') || getAudioSrc('audio'),
-
-      artist2Name:  getText('[data-artist-id="2"] .artist-title'),
-      artist2Img:   getImgSrc('img[data-artist-id="2"]') || getImgSrc('[data-artist-id="2"] img'),
-      artist2Audio: card.getAttribute('data-audio-url-2') || getAudioSrc('[data-artist-id="2"] audio'),
-
-      artist3Name:  getText('[data-artist-id="3"] .artist-title'),
-      artist3Img:   getImgSrc('img[data-artist-id="3"]') || getImgSrc('[data-artist-id="3"] img'),
-      artist3Audio: card.getAttribute('data-audio-url-3') || getAudioSrc('[data-artist-id="3"] audio'),
-
-      // Background video — <video src="..."> inside .card_feed_background-video embed
-      backgroundVideoUrl: (function() {
-        var embed = card.querySelector('.card_feed_background-video');
-        if (!embed) return '';
-        var video = embed.querySelector('video');
-        return video ? (video.getAttribute('src') || '') : '';
-      })(),
-    };
-  }
-
-  /**
-   * Builds a new card by cloning the structural template and populating
-   * with extracted CMS data. Sets data-audio-url-* attrs so injectAudioForCard()
-   * can create proper <audio> elements on demand.
-   */
-  function _buildCMSCard(template, data) {
-    var card = template.cloneNode(true);
-
-    // Card-level data attributes (read by injectAudioForCard and audio/filter observers)
-    card.setAttribute('data-event-slug', data.slug);
-    card.setAttribute('data-audio-url-1', data.artist1Audio);
-    card.setAttribute('data-audio-url-2', data.artist2Audio);
-    card.setAttribute('data-audio-url-3', data.artist3Audio);
-
-    // Slug references inside the card
-    card.querySelectorAll('[data-event-slug-source="true"]').forEach(function(el) {
-      el.textContent = data.slug;
-    });
-    card.querySelectorAll('[data-event-slug]').forEach(function(el) {
-      if (el !== card) el.setAttribute('data-event-slug', data.slug);
-    });
-
-    // Venue / city / date
-    var v = card.querySelector('.event_location-venue');
-    if (v) v.textContent = data.venueName;
-    var c = card.querySelector('.event_location-city');
-    if (c) c.textContent = data.venueCity;
-    var d = card.querySelector('.date_detailed');
-    if (d) d.textContent = data.date;
-
-    // Ticket link — update any non-hash, non-relative anchor
-    if (data.ticketLink) {
-      card.querySelectorAll('a[href]').forEach(function(a) {
-        var h = a.getAttribute('href') || '';
-        if (h && h !== '#' && !h.startsWith('/') && !h.startsWith('javascript')) {
-          a.setAttribute('href', data.ticketLink);
-        }
-      });
-    }
-
-    // Update artist images + names (images are rendered by HtmlEmbed CMS bindings)
-    var artists = [
-      { id: 1, name: data.artist1Name, img: data.artist1Img },
-      { id: 2, name: data.artist2Name, img: data.artist2Img },
-      { id: 3, name: data.artist3Name, img: data.artist3Img },
-    ];
-
-    artists.forEach(function(a) {
-      // Artist name in feed card
-      var nameEl = card.querySelector('[data-artist-id="' + a.id + '"] .artist-title');
-      if (nameEl && a.name) nameEl.textContent = a.name;
-
-      // Artist image: HtmlEmbed renders <img data-artist-id="N"> — update its src
-      var img = card.querySelector('img[data-artist-id="' + a.id + '"]') ||
-                card.querySelector('[data-artist-id="' + a.id + '"] img');
-      if (img) {
-        if (a.img) {
-          img.src = a.img;
-          img.removeAttribute('data-src'); // not deferred yet
-          img.removeAttribute('srcset');   // clear template card's srcset
-        } else {
-          // No image for this artist — hide the visual wrapper
-          var wrapper = img.closest('[data-artist-id="' + a.id + '"]');
-          if (wrapper) wrapper.style.display = 'none';
-        }
-      }
-    });
-
-    // Background video — set per-card src so every card shows its own video
-    if (data.backgroundVideoUrl) {
-      var bgEmbed = card.querySelector('.card_feed_background-video');
-      if (bgEmbed) {
-        var bgVideo = bgEmbed.querySelector('video');
-        if (bgVideo) bgVideo.setAttribute('src', data.backgroundVideoUrl);
-      }
-    }
-
-    return card;
   }
 
   function logFilterDiagnostics() {
