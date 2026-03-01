@@ -603,14 +603,17 @@ document.addEventListener("DOMContentLoaded", function() {
     e.stopPropagation();
 
     const card = trigger.closest(config.cardSelector) || trigger.closest(config.modalClass);
-    if (!card) return;
+    console.log('[Switcher] trigger:', trigger, '| card found:', card);
+    if (!card) { console.warn('[Switcher] no card/modal ancestor found'); return; }
 
     const artistIdAttr = trigger.getAttribute('data-artist-id');
-    if (!artistIdAttr) return;
+    console.log('[Switcher] data-artist-id attr:', artistIdAttr, '| trigger outerHTML:', trigger.outerHTML.slice(0, 200));
+    if (!artistIdAttr) { console.warn('[Switcher] data-artist-id missing on trigger'); return; }
 
     const artistId = parseInt(artistIdAttr);
 
     const allTaggedElements = card.querySelectorAll('[data-artist-id]');
+    console.log('[Switcher] tagged elements in scope:', allTaggedElements.length);
     allTaggedElements.forEach(el => {
       const elId = parseInt(el.getAttribute('data-artist-id'));
       const title = el.querySelector(config.titleSelector);
@@ -633,10 +636,12 @@ document.addEventListener("DOMContentLoaded", function() {
       const feedCard = slug
         ? document.querySelector(config.cardSelector + '[data-event-slug="' + CSS.escape(slug) + '"]')
         : null;
+      console.log('[Switcher] modal scope — slug:', slug, '| feed card found:', !!feedCard);
       if (feedCard) audioScope = feedCard;
     }
 
     const allAudios = Array.from(audioScope.querySelectorAll(config.audioSelector));
+    console.log('[Switcher] audio elements in scope:', allAudios.length, '| canPlay:', canPlayAudioNow());
     allAudios.forEach(a => a.pause());
 
     if (!canPlayAudioNow()) {
@@ -646,6 +651,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Select by data-artist-id so index gaps from missing audio URLs don't break switching
     const targetAudio = audioScope.querySelector(config.audioSelector + '[data-artist-id="' + artistId + '"]');
+    console.log('[Switcher] target audio for id', artistId, ':', targetAudio);
     if (targetAudio) {
       targetAudio.muted = false;
       targetAudio.play().catch(err => console.error("[Core] Switch error:", err));
