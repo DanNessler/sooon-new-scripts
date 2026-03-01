@@ -349,8 +349,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // ========================================================
   // ARTIST SWITCHER
-  // Toggles is-active on all [data-artist-id] elements within scope.
-  // Works in both feed cards and event modal.
+  // Scoped to .artist-visual and .artist-title only (triggers are parents, not targets).
+  // Works in both feed cards (.card_feed_item) and event modal (.event_modal_scope).
   // ========================================================
   document.addEventListener('click', function(e) {
     const trigger = e.target.closest(config.triggerSelector);
@@ -365,12 +365,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
     console.log('[Core] Artist switch:', artistId);
 
-    // Toggle is-active on all artist-scoped elements (excludes triggers)
-    scope.querySelectorAll('[data-artist-id].is-active').forEach(el => {
-      el.classList.remove(config.activeClass);
-    });
-    scope.querySelectorAll(`[data-artist-id="${artistId}"]`).forEach(el => {
-      el.classList.add(config.activeClass);
+    // Toggle is-active on visuals and titles only (not triggers — they wrap visuals/titles)
+    const switchTargets = config.visualSelector + '[data-artist-id], ' + config.titleSelector + '[data-artist-id]';
+    scope.querySelectorAll(switchTargets).forEach(el => {
+      el.classList.toggle(config.activeClass, el.getAttribute('data-artist-id') === artistId);
     });
 
     // Switch audio
