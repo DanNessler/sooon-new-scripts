@@ -349,6 +349,14 @@
       artist3Name:  getText('[data-artist-id="3"] .artist-title'),
       artist3Img:   getImgSrc('img[data-artist-id="3"]') || getImgSrc('[data-artist-id="3"] img'),
       artist3Audio: card.getAttribute('data-audio-url-3') || getAudioSrc('[data-artist-id="3"] audio'),
+
+      // Background video — <video src="..."> inside .card_feed_background-video embed
+      backgroundVideoUrl: (function() {
+        var embed = card.querySelector('.card_feed_background-video');
+        if (!embed) return '';
+        var video = embed.querySelector('video');
+        return video ? (video.getAttribute('src') || '') : '';
+      })(),
     };
   }
 
@@ -419,6 +427,15 @@
         }
       }
     });
+
+    // Background video — set per-card src so every card shows its own video
+    if (data.backgroundVideoUrl) {
+      var bgEmbed = card.querySelector('.card_feed_background-video');
+      if (bgEmbed) {
+        var bgVideo = bgEmbed.querySelector('video');
+        if (bgVideo) bgVideo.setAttribute('src', data.backgroundVideoUrl);
+      }
+    }
 
     return card;
   }
