@@ -189,113 +189,6 @@
     }
   }
 
-  // ── Filter diagnostics ──
-  // ========================================================
-  // CMS-BASED CARD RENDERING (replaces sooon-hybrid-feed.js)
-  //
-  // Waits for Finsweet to load all .card_feed_item elements,
-  // clones the first as a structural template, extracts all
-  // data from each Webflow-rendered card (including images
-  // rendered by HtmlEmbed bindings and audio elements), then
-  // rebuilds the feed with correct data-audio-url-* attrs so
-  // injectAudioForCard() and all existing observers work.
-  // ========================================================
-
-  function renderFeedFromCMS() {
-    console.log('[Core] CMS rendering: waiting for Finsweet to load cards...');
-
-    var attempts = 0;
-    var maxAttempts = 100; // 5s at 50ms intervals
-
-    // Lazy observer for non-eager cards (images + audio injection)
-    var cmsLazyObserver = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        if (!entry.isIntersecting) return;
-        loadCard(entry.target);
-        injectAudioForCard(entry.target);
-        cmsLazyObserver.unobserve(entry.target);
-      });
-    }, { rootMargin: LOAD_DISTANCE + ' 0px', threshold: 0 });
-
-    var pollTimer = setInterval(function() {
-      var cards = Array.from(document.querySelectorAll('.card_feed_item'));
-      attempts++;
-
-      if (cards.length > 0) {
-        clearInterval(pollTimer);
-        console.log('[Core] CMS rendering: found', cards.length, 'cards');
-        _processAllCMSCards(cards, cmsLazyObserver);
-
-      } else if (attempts >= maxAttempts) {
-        clearInterval(pollTimer);
-        console.warn('[Core] CMS rendering: timed out — falling back to standard init');
-        waitForCards(function(fallbackCards) {
-          if (fallbackCards.length > 0) {
-            init(fallbackCards);
-            window.sooonFeedReady = true;
-            console.log('[Core] Feed initialization complete (fallback), ready for deep links');
-          }
-        });
-      }
-    }, 50);
-  }
-
-  function _processAllCMSCards(originalCards, lazyObserver) {
-    // Clone each card's own DOM before touching the container — this preserves
-    // Webflow's per-card conditional visibility (display:none inline styles) and
-    // all CMS-resolved attributes exactly as Webflow rendered them.
-    var clones = originalCards.map(function(card) {
-      var clone = card.cloneNode(true);
-      clone.querySelectorAll('audio').forEach(function(a) { a.remove(); });
-      clone.removeAttribute('data-audio-injected');
-      return clone;
-    });
-
-    // Get/create scroll inner container
-    var innerContainer = ensureScrollInnerContainer();
-    if (!innerContainer) {
-      console.error('[Core] CMS rendering: could not create scroll container');
-      return;
-    }
-
-    // Clear existing Webflow-rendered DOM (replaced by per-card clones below)
-    innerContainer.innerHTML = '';
-
-    // Build and append cards — each clone already has correct visibility + CMS data.
-    // We only need to patch things that don't survive the container move: audio attrs
-    // and the background video src (which the template-clone approach was corrupting).
-    var built = 0;
-    clones.forEach(function(card, index) {
-      var slug = card.querySelector('[data-event-slug-source="true"]') &&
-                 card.querySelector('[data-event-slug-source="true"]').textContent.trim() ||
-                 card.getAttribute('data-event-slug') || '';
-      if (!slug) {
-        console.warn('[Core] CMS rendering: no slug at index', index, '— skipped');
-        return;
-      }
-
-      // Eager cards: inject audio immediately
-      if (index < EAGER_CARDS) {
-        injectAudioForCard(card);
-      } else {
-        // Defer images and queue audio injection via lazy observer
-        deferCard(card);
-        lazyObserver.observe(card);
-      }
-
-      if (window.sooonAudioObserver) window.sooonAudioObserver.observe(card);
-      if (window.sooonObserveCardAnimations) window.sooonObserveCardAnimations(card);
-
-      innerContainer.appendChild(card);
-      built++;
-    });
-
-    console.log('[Core] CMS rendering: complete —', built, '/', originalCards.length, 'cards built');
-    window.sooonFeedReady = true;
-    console.log('[Core] Feed initialization complete, ready for deep links');
-    setTimeout(logFilterDiagnostics, 2000);
-  }
-
   function logFilterDiagnostics() {
     console.log('[Core] === FILTER DIAGNOSTICS ===');
 
@@ -340,7 +233,14 @@
 
   // ── Entry point ──
   function start() {
-    renderFeedFromCMS();
+    waitForCards(function(cards) {
+      if (cards.length > 0) {
+        init(cards);
+        window.sooonFeedReady = true;
+        console.log('[Core] Feed initialization complete, ready for deep links');
+        setTimeout(logFilterDiagnostics, 2000);
+      }
+    });
   }
 
   var onboardingSeen = localStorage.getItem('sooon_onboarding_seen') === '1';
