@@ -349,16 +349,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // ========================================================
   // ARTIST SWITCHER
-  // DOM reality (confirmed via Webflow MCP):
-  //   Feed card: .artist-trigger[data-artist-id] wraps .artist-title (title has NO data-artist-id)
-  //              no .artist-visual in feed card; audio elements have no data-artist-id
-  //   Modal:     all [data-artist-id] elements present (artist_bio_title_wrapper,
-  //              player_album_image, artist_playing, artist-visual, apple-music-button)
-  //              second trigger list also uses trigger-wraps-title pattern
-  // Strategy:
-  //   1. Toggle .is-active on all .artist-trigger[data-artist-id] in scope
-  //   2. Toggle .is-active on all [data-artist-id] non-trigger elements in scope
-  //   3. Audio: index-based fallback (no data-artist-id on audio at runtime)
+  // DOM reality (confirmed via Webflow DOM inspection):
+  //   .artist-title has NO data-artist-id — it's a child of .artist-trigger
+  //   Must find it via el.querySelector('.artist-title') inside each tagged element.
+  //   .card_feed_item wraps both feed UI and modal — use it as root.
+  //   Audio elements have no data-artist-id at runtime — use index-based lookup.
   // ========================================================
   document.addEventListener('click', function(e) {
     const trigger = e.target.closest(config.triggerSelector);
@@ -367,33 +362,36 @@ document.addEventListener("DOMContentLoaded", function() {
     e.preventDefault();
     e.stopPropagation();
 
-    const artistId = trigger.getAttribute('data-artist-id');
-    const scope = trigger.closest(config.cardSelector + ', .event_modal_scope');
-    if (!scope || !artistId) return;
+    const card = trigger.closest(config.cardSelector);
+    if (!card) return;
 
-    console.log('[Core] Artist switch:', artistId);
+    const artistIdAttr = trigger.getAttribute('data-artist-id');
+    if (!artistIdAttr) return;
 
-    // 1. Toggle triggers themselves (covers feed card visual state + title child inside)
-    scope.querySelectorAll(config.triggerSelector + '[data-artist-id]').forEach(el => {
-      el.classList.toggle(config.activeClass, el.getAttribute('data-artist-id') === artistId);
+    const artistId = parseInt(artistIdAttr, 10);
+
+    card.querySelectorAll('[data-artist-id]').forEach(el => {
+      const elId = parseInt(el.getAttribute('data-artist-id'), 10);
+      const title = el.querySelector(config.titleSelector);
+      if (elId === artistId) {
+        el.classList.add(config.activeClass);
+        if (title) title.classList.add(config.activeClass);
+      } else {
+        el.classList.remove(config.activeClass);
+        if (title) title.classList.remove(config.activeClass);
+      }
     });
 
-    // 2. Toggle all other [data-artist-id] elements (modal: album image, bio wrapper, playing info, visual, Apple Music button)
-    scope.querySelectorAll('[data-artist-id]:not(' + config.triggerSelector + ')').forEach(el => {
-      el.classList.toggle(config.activeClass, el.getAttribute('data-artist-id') === artistId);
-    });
-
-    // 3. Switch audio — audio elements have no data-artist-id, use index (artistId is "1"/"2"/"3")
-    const allAudios = Array.from(scope.querySelectorAll(config.audioSelector));
+    const allAudios = Array.from(card.querySelectorAll(config.audioSelector));
     allAudios.forEach(a => a.pause());
 
     if (!canPlayAudioNow()) return;
 
-    const targetAudio = allAudios[parseInt(artistId, 10) - 1];
+    const targetAudio = allAudios[artistId - 1];
     if (targetAudio) {
       targetAudio.currentTime = 0;
       targetAudio.muted = false;
-      targetAudio.play().catch(err => console.log('[Core] Audio play failed:', err));
+      targetAudio.play().catch(() => {});
     }
   });
 
