@@ -14,7 +14,6 @@
   const LOAD_DISTANCE = '200%';
   let initialized = false;
 
-  // ── Step 1: Wait for Webflow CMS to finish populating cards ──
   function waitForCards(callback) {
     let attempts = 0;
     const check = setInterval(() => {
@@ -27,7 +26,6 @@
     }, 50);
   }
 
-  // ── Step 2: Defer images on cards beyond EAGER_CARDS ──
   function deferCard(card) {
     card.querySelectorAll('img').forEach(function(img) {
       if (img.hasAttribute('data-lazy-processed')) return;
@@ -59,29 +57,20 @@
     });
   }
 
-  // ── Step 3: Load assets back when card enters viewport ──
   function loadCard(card) {
     card.querySelectorAll('img[data-src]').forEach(function(img) {
       var src = img.getAttribute('data-src');
-      if (src) {
-        img.src = src;
-        img.removeAttribute('data-src');
-      }
+      if (src) { img.src = src; img.removeAttribute('data-src'); }
     });
     card.querySelectorAll('video[data-src]').forEach(function(video) {
       var src = video.getAttribute('data-src');
-      if (src) {
-        video.src = src;
-        video.load();
-        video.removeAttribute('data-src');
-      }
+      if (src) { video.src = src; video.load(); video.removeAttribute('data-src'); }
     });
     card.querySelectorAll('audio[data-src]').forEach(function(audio) {
       var srcData = audio.getAttribute('data-src');
       if (srcData) {
         try {
-          var srcArray = JSON.parse(srcData);
-          srcArray.forEach(function(src) {
+          JSON.parse(srcData).forEach(function(src) {
             if (!src) return;
             var source = document.createElement('source');
             source.src = src;
@@ -95,7 +84,6 @@
     });
   }
 
-  // ── Step 4: Main init — runs after cards exist ──
   function init(cards) {
     if (initialized) return;
     initialized = true;
@@ -111,17 +99,11 @@
         loadCard(entry.target);
         observer.unobserve(entry.target);
       });
-    }, {
-      rootMargin: LOAD_DISTANCE + ' 0px',
-      threshold: 0
-    });
+    }, { rootMargin: LOAD_DISTANCE + ' 0px', threshold: 0 });
 
-    cards.forEach(function(card) {
-      observer.observe(card);
-    });
+    cards.forEach(function(card) { observer.observe(card); });
   }
 
-  // ── Entry point ──
   function start() {
     waitForCards(function(cards) {
       if (cards.length > 0) {
@@ -139,9 +121,7 @@
   } else {
     var confirmBtn = document.querySelector('[data-sooon-onboarding-confirm="true"]');
     if (confirmBtn) {
-      confirmBtn.addEventListener('click', function() {
-        setTimeout(start, 300);
-      });
+      confirmBtn.addEventListener('click', function() { setTimeout(start, 300); });
     } else {
       setTimeout(start, 2000);
     }
@@ -161,12 +141,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
   const DEFAULT_AUDIO_ENABLED = true;
 
-  const setSeen = () => localStorage.setItem(STORAGE.seen, "1");
-
   const getAudioEnabled = () => {
     const v = localStorage.getItem(STORAGE.audio);
-    if (v === null) return DEFAULT_AUDIO_ENABLED;
-    return v === "1";
+    return v === null ? DEFAULT_AUDIO_ENABLED : v === "1";
   };
 
   const setAudioEnabled = (enabled) => localStorage.setItem(STORAGE.audio, enabled ? "1" : "0");
@@ -178,7 +155,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
   const confirmBtn = document.querySelector('[data-sooon-onboarding-confirm="true"]');
 
-  // --- CONFIGURATION ---
   const config = {
     classIn: 'anim-start-in',
     classOut: 'anim-start-out',
@@ -194,186 +170,115 @@ document.addEventListener("DOMContentLoaded", function() {
 
     activeClass: 'is-active',
 
-    openTrigger: '.modal-open-button',
+    openTrigger: '.modal-open-button, .modal-open-hitarea',
     closeTrigger: '.modal-close-button',
-    modalClass: '.event_modal'
   };
 
   // ========================================================
-  // MODAL SCROLL LOCK (Webflow IX compatible)
+  // MODAL SCROLL LOCK
   // ========================================================
   document.addEventListener('click', function(e) {
     if (e.target.closest(config.openTrigger)) {
-      setTimeout(() => {
-        document.body.classList.add('is-locked');
-      }, 50);
+      setTimeout(() => document.body.classList.add('is-locked'), 50);
     }
     if (e.target.closest(config.closeTrigger)) {
       document.body.classList.remove('is-locked');
     }
   });
 
-  document.addEventListener('click', function(e) {
-    if (e.target.closest('.modal-open-hitarea')) {
-      setTimeout(() => {
-        document.body.classList.add('is-locked');
-      }, 50);
-    }
-  });
-
   // ========================================================
-  // AUDIO STATE (single source of truth)
+  // AUDIO STATE
   // ========================================================
   let audioEnabled = getAudioEnabled();
 
-  // Persist default ON once
-  const existing = localStorage.getItem(STORAGE.audio);
-  if (existing !== "1" && existing !== "0") {
+  if (localStorage.getItem(STORAGE.audio) === null) {
     setAudioEnabled(DEFAULT_AUDIO_ENABLED);
     audioEnabled = DEFAULT_AUDIO_ENABLED;
   }
 
-  // ========================================================
-  // FEED AUDIO UI UPDATE
-  // Updates all feed card audio-on-off buttons
-  // ========================================================
-  const updateFeedButtonsUI = () => {
-    document.querySelectorAll('.audio-on-off_button').forEach(btn => {
-      const onIcon = btn.querySelector('.audio-on-icon');
-      const offIcon = btn.querySelector('.audio-off-icon');
-
-      if (!onIcon || !offIcon) return;
-
-      if (audioEnabled) {
-        onIcon.classList.remove('is-hidden');
-        offIcon.classList.add('is-hidden');
-      } else {
-        onIcon.classList.add('is-hidden');
-        offIcon.classList.remove('is-hidden');
-      }
-    });
-  };
-
-  // Wrapper — sooon-core.js only manages feed UI (intro UI handled by sooon-critical.js)
-  const updateAudioUI = () => {
-    updateFeedButtonsUI();
-  };
-
-  // Initialize feed audio UI on load
-  updateAudioUI();
-
-  // Sync with sooon-critical.js intro toggle changes
-  window.addEventListener('sooon:audio-changed', function(e) {
-    audioEnabled = e.detail.enabled;
-    updateAudioUI();
-  });
-
-  // ========================================================
-  // AUDIO HELPERS
-  // ========================================================
   const isOnboardingOpen = () => onboardingScreen && !onboardingScreen.classList.contains("is-hidden");
   const canPlayAudioNow = () => audioEnabled && !isOnboardingOpen();
 
   const stopAllAudio = (resetTime = true) => {
     document.querySelectorAll(config.audioSelector).forEach(a => {
-      try {
-        a.pause();
-        if (resetTime) a.currentTime = 0;
-        a.muted = true;
-      } catch(_) {}
+      try { a.pause(); if (resetTime) a.currentTime = 0; a.muted = true; } catch(_) {}
     });
   };
+
+  // ========================================================
+  // FEED AUDIO UI
+  // ========================================================
+  const updateFeedButtonsUI = () => {
+    document.querySelectorAll('.audio-on-off_button').forEach(btn => {
+      const onIcon  = btn.querySelector('.audio-on-icon');
+      const offIcon = btn.querySelector('.audio-off-icon');
+      if (!onIcon || !offIcon) return;
+      onIcon.classList.toggle('is-hidden', !audioEnabled);
+      offIcon.classList.toggle('is-hidden', audioEnabled);
+    });
+  };
+
+  updateFeedButtonsUI();
+
+  window.addEventListener('sooon:audio-changed', function(e) {
+    audioEnabled = e.detail.enabled;
+    updateFeedButtonsUI();
+  });
 
   // ========================================================
   // AUDIO TOGGLE (feed card buttons via delegation)
   // ========================================================
-  const toggleAudio = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const wasEnabled = audioEnabled;
-    audioEnabled = !audioEnabled;
-    setAudioEnabled(audioEnabled);
-    updateAudioUI();
-
-    if (!audioEnabled) {
-      stopAllAudio(true);
-    } else {
-      // Turning ON — manually restart current card's audio if visible
-      if (wasEnabled === false && !isOnboardingOpen()) {
-        const cards = Array.from(document.querySelectorAll(config.cardSelector));
-        const visibleCard = cards.find(card => {
-          const r = card.getBoundingClientRect();
-          const vh = window.innerHeight;
-          const visibleHeight = Math.min(r.bottom, vh) - Math.max(r.top, 0);
-          const cardHeight = r.height;
-          return visibleHeight / cardHeight >= 0.6;
-        });
-
-        if (visibleCard) {
-          const audio = visibleCard.querySelector(config.audioSelector);
-          if (audio) {
-            document.querySelectorAll(config.audioSelector).forEach(a => {
-              if (a !== audio) {
-                try { a.pause(); a.currentTime = 0; } catch(_) {}
-              }
-            });
-            audio.muted = false;
-            audio.play().catch(()=>{});
-          }
-        }
-      }
-    }
-  };
-
-  // Feed card audio buttons (event delegation for CMS-generated content)
   document.addEventListener('click', function(e) {
     const audioBtn = e.target.closest('.audio-on-off_button');
     if (!audioBtn) return;
     if (e.target.closest('.modal-open-button, .modal-open-hitarea, .artist-trigger')) return;
-    toggleAudio(e);
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    audioEnabled = !audioEnabled;
+    setAudioEnabled(audioEnabled);
+    updateFeedButtonsUI();
+
+    if (!audioEnabled) {
+      stopAllAudio(true);
+    } else if (!isOnboardingOpen()) {
+      // Turning ON — play the currently visible card
+      const visibleCard = Array.from(document.querySelectorAll(config.cardSelector)).find(card => {
+        const r = card.getBoundingClientRect();
+        return (Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0)) / r.height >= 0.6;
+      });
+      if (visibleCard) {
+        const audio = visibleCard.querySelector(config.audioSelector);
+        if (audio) {
+          document.querySelectorAll(config.audioSelector).forEach(a => {
+            if (a !== audio) { try { a.pause(); a.currentTime = 0; } catch(_) {} }
+          });
+          audio.muted = false;
+          audio.play().catch(()=>{});
+        }
+      }
+    }
   }, true);
 
   // ========================================================
-  // PLAY FIRST VISIBLE CARD
-  // ========================================================
-  const playFirstVisibleCardAudio = () => {
-    if (!audioEnabled) return;
-
-    const cards = Array.from(document.querySelectorAll(config.cardSelector));
-    if (!cards.length) return;
-
-    const firstVisible = cards.find(card => {
-      const r = card.getBoundingClientRect();
-      return r.bottom > 0 && r.top < window.innerHeight;
-    }) || cards[0];
-
-    const audio = firstVisible.querySelector(config.audioSelector);
-    if (!audio) return;
-
-    document.querySelectorAll(config.audioSelector).forEach(a => {
-      if (a !== audio) { try { a.pause(); a.currentTime = 0; } catch(_) {} }
-    });
-
-    audio.muted = false;
-    audio.play().catch(()=>{});
-  };
-
-  // ========================================================
   // CONFIRM BUTTON — Start feed audio after intro dismissal
-  // State management (setSeen, scroll unlock) handled by sooon-critical.js
   // ========================================================
   if (confirmBtn) {
     confirmBtn.addEventListener("click", () => {
       if (audioEnabled) {
-        // iOS unlock for feed audio elements
         document.querySelectorAll(config.audioSelector).forEach(a => {
           try { a.muted = false; a.play().catch(()=>{}); a.pause(); } catch(_) {}
         });
-
-        // Allow intro animation to start; then begin feed audio
         setTimeout(() => {
-          playFirstVisibleCardAudio();
+          const cards = Array.from(document.querySelectorAll(config.cardSelector));
+          if (!cards.length) return;
+          const first = cards.find(c => {
+            const r = c.getBoundingClientRect();
+            return r.bottom > 0 && r.top < window.innerHeight;
+          }) || cards[0];
+          const audio = first.querySelector(config.audioSelector);
+          if (audio) { audio.muted = false; audio.play().catch(()=>{}); }
         }, 150);
       } else {
         stopAllAudio(true);
@@ -387,13 +292,11 @@ document.addEventListener("DOMContentLoaded", function() {
   const handleIntersect = (entries) => {
     entries.forEach(entry => {
       const el = entry.target;
-      const delayIn = el.getAttribute('data-delay-in') || 0;
-      const delayOut = el.getAttribute('data-delay-out') || 0;
       if (entry.isIntersecting) {
-        el.style.transitionDelay = `${delayIn}ms`;
+        el.style.transitionDelay = `${el.getAttribute('data-delay-in') || 0}ms`;
         requestAnimationFrame(() => el.classList.remove(config.classIn, config.classOut));
       } else {
-        el.style.transitionDelay = `${delayOut}ms`;
+        el.style.transitionDelay = `${el.getAttribute('data-delay-out') || 0}ms`;
         const isTopHalf = entry.boundingClientRect.top < (window.innerHeight / 2);
         el.classList.remove(isTopHalf ? config.classIn : config.classOut);
         el.classList.add(isTopHalf ? config.classOut : config.classIn);
@@ -401,25 +304,20 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   };
 
-  const getObserver = (exitValue) => {
-    const rootMargin = `-${exitValue}% 0px -1% 0px`;
-    return new IntersectionObserver(handleIntersect, { threshold: 0, rootMargin });
-  };
-
   document.querySelectorAll(config.animTrigger).forEach(el => {
     el.classList.add(config.classIn);
     const exit = parseInt(el.getAttribute('data-exit-threshold')) || config.defaultExitThreshold;
-    getObserver(exit).observe(el);
+    new IntersectionObserver(handleIntersect, {
+      threshold: 0,
+      rootMargin: `-${exit}% 0px -1% 0px`
+    }).observe(el);
   });
 
   // ========================================================
-  // AUDIO OBSERVER (gated by onboarding + audio state)
+  // AUDIO OBSERVER (60% visibility threshold)
   // ========================================================
   const audioObserver = new IntersectionObserver((entries) => {
-    if (!canPlayAudioNow()) {
-      stopAllAudio(false);
-      return;
-    }
+    if (!canPlayAudioNow()) { stopAllAudio(false); return; }
 
     entries.forEach(entry => {
       const audio = entry.target.querySelector(config.audioSelector);
@@ -437,24 +335,22 @@ document.addEventListener("DOMContentLoaded", function() {
 
   document.querySelectorAll(config.cardSelector).forEach(card => audioObserver.observe(card));
 
+  // iOS audio unlock on first gesture
   const unlockAudio = () => {
     if (!canPlayAudioNow()) return;
-
     document.querySelectorAll(config.audioSelector).forEach(a => {
-      a.muted = false;
-      a.play().catch(()=>{});
-      a.pause();
+      a.muted = false; a.play().catch(()=>{}); a.pause();
     });
-
     document.removeEventListener('click', unlockAudio);
     document.removeEventListener('touchstart', unlockAudio);
   };
-
   document.addEventListener('click', unlockAudio);
   document.addEventListener('touchstart', unlockAudio);
 
   // ========================================================
-  // UNIVERSAL ARTIST SWITCHER
+  // ARTIST SWITCHER
+  // Toggles is-active on .artist-visual and .artist-title elements.
+  // .artist-trigger also carries data-artist-id but is excluded.
   // ========================================================
   document.addEventListener('click', function(e) {
     const trigger = e.target.closest(config.triggerSelector);
@@ -466,38 +362,23 @@ document.addEventListener("DOMContentLoaded", function() {
     const card = trigger.closest(config.cardSelector);
     if (!card) return;
 
-    const artistIdAttr = trigger.getAttribute('data-artist-id');
-    if (!artistIdAttr) return;
+    const artistId = parseInt(trigger.getAttribute('data-artist-id'));
+    if (!artistId) return;
 
-    const artistId = parseInt(artistIdAttr);
-    const targetIndex = artistId - 1;
-
-    const allTaggedElements = card.querySelectorAll('[data-artist-id]');
-    allTaggedElements.forEach(el => {
-      const elId = parseInt(el.getAttribute('data-artist-id'));
-      const title = el.querySelector(config.titleSelector);
-
-      if (elId === artistId) {
-        el.classList.add(config.activeClass);
-        if (title) title.classList.add(config.activeClass);
-      } else {
-        el.classList.remove(config.activeClass);
-        if (title) title.classList.remove(config.activeClass);
-      }
+    // Update visual and title active states
+    const selector = config.visualSelector + '[data-artist-id], ' + config.titleSelector + '[data-artist-id]';
+    card.querySelectorAll(selector).forEach(el => {
+      el.classList.toggle(config.activeClass, parseInt(el.getAttribute('data-artist-id')) === artistId);
     });
 
+    // Switch audio
     const allAudios = Array.from(card.querySelectorAll(config.audioSelector));
     allAudios.forEach(a => a.pause());
 
-    if (!canPlayAudioNow()) {
-      stopAllAudio(false);
-      return;
-    }
+    if (!canPlayAudioNow()) { stopAllAudio(false); return; }
 
-    if (allAudios[targetIndex]) {
-      allAudios[targetIndex].muted = false;
-      allAudios[targetIndex].play().catch(err => console.error("[Core] Switch error:", err));
-    }
+    const target = allAudios[artistId - 1];
+    if (target) { target.muted = false; target.play().catch(()=>{}); }
   });
 
   console.log('[Core] Feed system initialized');
@@ -507,7 +388,7 @@ document.addEventListener("DOMContentLoaded", function() {
 // ========================================================
 // FILTER-TO-FEED LINKING
 // ========================================================
-document.addEventListener("click", function (e) {
+document.addEventListener("click", function(e) {
   const item = e.target.closest(".stacked-list2_item[data-target-slug]");
   if (!item) return;
 
@@ -521,8 +402,7 @@ document.addEventListener("click", function (e) {
 
   requestAnimationFrame(() => {
     const target = document.querySelector('.card_feed_item[data-event-slug="' + CSS.escape(slug) + '"]');
-    if (!target) return;
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 });
 
@@ -541,7 +421,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-
   const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
 
   const values = {
@@ -551,8 +430,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   document.querySelectorAll('input[name="date-quick"][data-date-role]').forEach((input) => {
-    const role = input.getAttribute("data-date-role");
-    const v = values[role];
+    const v = values[input.getAttribute("data-date-role")];
     if (!v) return;
     input.value = v;
     input.setAttribute("value", v);
@@ -564,11 +442,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 // ========================================================
-// CARD FEED EMPTY STATE — JS-managed visibility
-// The empty state is a sibling of .card_feed-wrapper (outside the
-// scroll container), so Finsweet can't reveal it through the wrapper.
-// We watch card items for Finsweet's display:none toggling and hide
-// the wrapper when 0 results, letting the empty state show through.
+// CARD FEED EMPTY STATE
+// Hides .card_feed-wrapper when Finsweet removes all items,
+// revealing the empty state sibling behind it.
 // ========================================================
 document.addEventListener('DOMContentLoaded', function() {
   var feedWrapper = document.querySelector('.card_feed-wrapper');
@@ -577,30 +453,21 @@ document.addEventListener('DOMContentLoaded', function() {
   var listEl = feedWrapper.querySelector('[fs-list-element="list"]');
   if (!listEl) return;
 
-  console.log('[Core] Card feed empty state: JS-managed');
-
   var syncTimeout;
   function syncEmptyState() {
     clearTimeout(syncTimeout);
     syncTimeout = setTimeout(function() {
-      var allItems = listEl.querySelectorAll('.card_feed_item');
-
-      // 0 items = Finsweet removed them all from DOM (not just display:none)
-      var hasResults = allItems.length > 0 && Array.from(allItems).some(function(item) {
+      var items = listEl.querySelectorAll('.card_feed_item');
+      var hasResults = items.length > 0 && Array.from(items).some(function(item) {
         return window.getComputedStyle(item).display !== 'none';
       });
-
       feedWrapper.style.display = hasResults ? '' : 'none';
-
-      if (!hasResults) {
-        console.log('[Core] Filter: 0 results — feed hidden, empty state visible');
-      }
     }, 50);
   }
 
   new MutationObserver(syncEmptyState).observe(listEl, {
     subtree: true,
-    childList: true,          // Finsweet removes items from DOM — not just display:none
+    childList: true,
     attributes: true,
     attributeFilter: ['style']
   });

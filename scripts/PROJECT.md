@@ -1,6 +1,6 @@
 # sooon Project Context
 
-**Last Updated:** 2026-03-01 (v5.4 — CMS-based card rendering)
+**Last Updated:** 2026-03-01 (v5.5 — Reverted to Webflow-native feed; sooon-api.js added)
 **Project Type:** Mobile-first concert discovery platform
 **Stack:** Webflow CMS + Custom JavaScript
 
@@ -239,7 +239,7 @@ Implementation in sooon-core.js (date filtering section):
 
 ---
 
-## Current Scripts (v5.2 — Split Architecture + Bookmarks)
+## Current Scripts (v5.5 — Split Architecture + Bookmarks + API client)
 
 Scripts are split into tiers for fast intro screen loading.
 
@@ -258,7 +258,7 @@ Scripts are split into tiers for fast intro screen loading.
 
 ### Coordination Between Scripts
 - **sooon-critical.js** sets `localStorage` + `window.sooonIntroReady = true` when intro is dismissed (or skipped for deep link first visitors)
-- **sooon-core.js** reads `localStorage` on init, listens for `sooon:audio-changed` custom event from intro toggle. Sets `window.sooonFeedReady = true` after feed initialization (cards loaded + assets processed)
+- **sooon-core.js** reads `localStorage` on init, listens for `sooon:audio-changed` custom event from intro toggle. Sets `window.sooonFeedReady = true` after feed initialization (cards polled + assets deferred)
 - Both files attach independent click handlers to "Discover Shows" button (critical = state, core = audio)
 - **event-features.js** deep link navigation polls `window.sooonFeedReady` before scrolling. Share/map/calendar features are independent (event delegation, only triggers in modals)
 - **sooon-bookmarks.js** is fully independent — no cross-script flags needed
@@ -283,7 +283,7 @@ event-features.js (deferred):
 
 ---
 
-### 1. sooon-critical.js ✅ PRODUCTION (blocking, ~100 lines)
+### 1. sooon-critical.js ✅ PRODUCTION (blocking, ~102 lines)
 **Purpose:** Make intro screen interactive immediately (<1 second)
 **Loaded:** Blocking `<script>` — runs before deferred scripts
 
@@ -305,34 +305,41 @@ event-features.js (deferred):
 
 ---
 
-### 2. sooon-core.js ✅ PRODUCTION (deferred, ~630 lines)
+### 2. sooon-core.js ✅ PRODUCTION (deferred, ~474 lines)
 **Purpose:** All feed functionality — loads in background while user sees intro
+**Note:** `renderFeedFromCMS()` was reverted (commit `7da8982`). Feed uses Webflow-native CMS rendering; this script observes and enhances the Webflow-rendered cards.
 
-**Features:**
-- **CMS-based card rendering** (`renderFeedFromCMS()` — replaces sooon-hybrid-feed.js)
-  - Polls for `.card_feed_item` elements (50ms intervals, max 100 attempts / 5s)
-  - Clones first Webflow-rendered card as structural template
-  - Extracts data from each card: slug, venue, city, date, ticket link, artist names, image srcs (from HtmlEmbed-rendered `<img data-artist-id>` elements), audio srcs (from HtmlEmbed-rendered `<audio>` elements)
-  - Rebuilds feed with correct `data-audio-url-1/2/3` attributes so `injectAudioForCard()` and all observers work
-  - Falls back to standard `init()` if polling times out
-  - Eager loads first 3 cards (`EAGER_CARDS = 3`), defers rest via lazy IntersectionObserver
-  - **Sets `window.sooonFeedReady = true`** after feed is built
-- **Sequential asset loader**
-  - Eager loads first 3 cards (`EAGER_CARDS = 3`)
-  - Defers images/videos/audio on cards beyond #3 (`data-src` pattern)
-  - Lazy loads via `IntersectionObserver` with `rootMargin: "200% 0px"`
-  - Onboarding aware: waits for "Discover Shows" click on first visit
+**Architecture — Two IIFEs + two DOMContentLoaded listeners:**
+
+**IIFE 1 — Sequential Asset Loader** (runs immediately when deferred script executes):
+- Polls for `.card_feed_item` elements (50ms intervals, max 40 attempts / 2s)
+- Eager loads first 3 cards (`EAGER_CARDS = 3`)
+- Defers images/videos/audio on cards beyond #3 (`data-src` pattern)
+- Lazy loads via `IntersectionObserver` with `rootMargin: "200% 0px"`
+- Onboarding aware: waits for "Discover Shows" click on first visit
+- **Sets `window.sooonFeedReady = true`** after cards are found
+
+**DOMContentLoaded block — Feed audio, modals, animations, artist switcher:**
 - **Feed audio system**
   - Audio IntersectionObserver (60% threshold)
   - Audio play/pause logic (one at a time, globally enforced)
-  - Feed card audio toggle buttons (`.audio-on-off_button` via delegation)
+  - Feed card audio toggle buttons (`.audio-on-off_button` via delegation, capture phase)
   - Feed audio UI sync (`.audio-on-icon`, `.audio-off-icon`, `.is-hidden`)
   - Listens for `sooon:audio-changed` event from sooon-critical.js
 - **Modal scroll lock** (`.modal-open-button`, `.modal-open-hitarea`, `.modal-close-button`)
 - **Scroll animations** (`[data-animate="true"]` with delays/thresholds)
-- **Universal artist switcher** (multi-artist cards)
-- **Filter-to-feed linking** (`.stacked-list2_item[data-target-slug]`)
-- **Dynamic date filtering** (Finsweet integration, today/tomorrow/next-month)
+- **Universal artist switcher** (multi-artist cards, stops propagation before modal/audio guards)
+
+**Standalone click listener — Filter-to-feed linking:**
+- `.stacked-list2_item[data-target-slug]` — closes filter screen, scrolls to card via `data-event-slug` attribute
+
+**DOMContentLoaded block — Dynamic date filtering (Finsweet integration):**
+- Injects today/tomorrow/next-month-start values into `input[name="date-quick"][data-date-role]`
+
+**DOMContentLoaded block — Card feed empty state:**
+- MutationObserver on `[fs-list-element="list"]` (`childList: true`, `subtree: true`)
+- Hides `.card_feed-wrapper` (sets `display: none`) when 0 `.card_feed_item` elements remain
+- Reveals wrapper when items return (Finsweet restores them)
 
 **Key Configuration:**
 ```javascript
@@ -349,7 +356,7 @@ audioObserver threshold = 0.6 (60% visible)
 
 ---
 
-### 3. event-features.js ✅ PRODUCTION (deferred, ~580 lines)
+### 3. event-features.js ✅ PRODUCTION (deferred, ~362 lines)
 **Purpose:** Combined event modal features — share, map, calendar export
 **Structure:** 3 independent IIFEs, each with own config and event delegation
 
@@ -380,7 +387,7 @@ audioObserver threshold = 0.6 (60% visible)
 
 ---
 
-### 4. sooon-bookmarks.js ✅ PRODUCTION (deferred, ~360 lines)
+### 4. sooon-bookmarks.js ✅ PRODUCTION (deferred, ~357 lines)
 **Purpose:** Event bookmarking with localStorage persistence and favourites list
 **Console prefix:** `[Bookmarks]`
 
@@ -412,6 +419,12 @@ audioObserver threshold = 0.6 (60% visible)
 
 ---
 
+### 5. sooon-api.js ⏸ SHELVED (not in use, ~320 lines)
+**Purpose:** API-based feed renderer — future exploration only
+**Status:** Not loaded in production. Not actively developed. Webflow CMS collection is the source of truth for the foreseeable future.
+
+---
+
 ### Deprecated Scripts (replaced by split architecture)
 
 | Old File | Replaced By | Status |
@@ -420,7 +433,7 @@ audioObserver threshold = 0.6 (60% visible)
 | `event-share.js` | `event-features.js` (Event Share section) | Kept for reference |
 | `venue-map.js` | `event-features.js` (Venue Map section) | Kept for reference |
 | `calendar-export.js` | `event-features.js` (Calendar Export section) | Kept for reference |
-| `sooon-hybrid-feed.js` | `sooon-core.js` (`renderFeedFromCMS()`) | Renamed to `.deprecated.js` (commit `bf62b99`) |
+| `sooon-hybrid-feed.js` | Absorbed into sooon-core.js then reverted; renamed to `.deprecated.js` (commit `bf62b99`), `renderFeedFromCMS()` reverted at `7da8982` | `.deprecated.js` kept for reference |
 
 ---
 
@@ -593,23 +606,14 @@ audioObserver threshold = 0.6 (60% visible)
 
 **Commits:** `f7fe93b`, `af8de55`, `a2f69a3`, `5ce3e36`
 
-### ✅ RESOLVED: Hybrid Feed Card Injection Replaced (2026-03-01)
-**Problem:** `sooon-hybrid-feed.js` was a DEBUG BUILD causing unreliable card injection — kept only 5 Webflow cards (`KEEP_CARDS=5`), fetched images from the API, injected cloned cards on scroll. Cards were being removed post-injection, wrong card counts, scroll fallback issues.
+### ↩️ REVERTED: Hybrid Feed Card Injection (2026-03-01)
+**Problem:** `sooon-hybrid-feed.js` was a DEBUG BUILD causing unreliable card injection — kept only 5 Webflow cards (`KEEP_CARDS=5`), fetched images from the API, injected cloned cards on scroll.
 
-**Solution:** Absorbed into `sooon-core.js` as `renderFeedFromCMS()`:
-- Polls for `.card_feed_item` elements populated by Finsweet CMS Load
-- Clones first card as structural template (strips audio so `injectAudioForCard()` can reinject from data attrs)
-- Extracts artist images from HtmlEmbed-rendered `<img data-artist-id="N">` elements
-- Extracts audio URLs from HtmlEmbed-rendered `<audio>` elements (fallback chain: `data-audio-url-N` attr → `[data-artist-id="N"] audio` → `audio.track-audio` → `audio`)
-- Rebuilds feed in `ensureScrollInnerContainer()` with correct `data-audio-url-1/2/3` attrs
-- All existing observers (`sooonAudioObserver`, `sooonObserveCardAnimations`, lazy loader) applied to rebuilt cards
-- Falls back to standard `init()` if polling times out after 5s
+**First attempt:** Absorbed into `sooon-core.js` as `renderFeedFromCMS()` (commit `bf62b99`) — cloned Webflow cards, extracted audio/image URLs from HtmlEmbed-rendered elements, rebuilt feed with correct `data-audio-url-1/2/3` attrs.
 
-**Key discovery:** Artist visuals in the feed are `HtmlEmbed` Webflow elements that render CMS-bound `<img data-artist-id="N">` and `<audio>` tags via `{{artist-N-img.url}}` bindings. Standard Webflow Image elements with `data-artist-id` exist only in the event modal.
+**Reverted:** Multiple follow-up issues with card cloning (wrong card counts, cards being removed post-injection, scroll fallback problems). Reverted to Webflow-native feed rendering at commit `7da8982` ("Revert: remove card cloning, restore Webflow-native feed rendering"). `sooon-core.js` now observes and enhances Webflow-rendered cards without re-rendering them.
 
-**Commit:** `bf62b99`
-
-**Webflow action required:** Remove `sooon-hybrid-feed.js` script tag from Webflow custom code; update `sooon-core.js` CDN URL to `@bf62b99`.
+**Current approach:** sooon-core.js polls for Webflow-rendered `.card_feed_item` elements and enhances them in-place (deferred asset loading, audio observers, animations). The `sooon-api.js` script is the new path forward for full API-based rendering.
 
 ---
 
@@ -619,15 +623,17 @@ audioObserver threshold = 0.6 (60% visible)
 sooon-new-scripts/
 ├── scripts/
 │   ├── PROJECT.md                        ← This file (Claude's context)
-│   ├── sooon-critical.js                 ← Intro screen only (blocking, ~100 lines)
-│   ├── sooon-core.js                     ← Feed/audio/modals/filters (deferred, ~630 lines)
-│   ├── event-features.js                 ← Combined share+map+calendar (deferred, ~580 lines)
-│   ├── sooon-bookmarks.js                ← Bookmarks + favourites list (deferred, ~360 lines)
+│   ├── sooon-critical.js                 ← Intro screen only (blocking, ~102 lines)
+│   ├── sooon-core.js                     ← Feed/audio/modals/filters (deferred, ~474 lines)
+│   ├── event-features.js                 ← Combined share+map+calendar (deferred, ~362 lines)
+│   ├── sooon-bookmarks.js                ← Bookmarks + favourites list (deferred, ~357 lines)
+│   ├── sooon-api.js                      ← API-based feed renderer (NOT in production, ~320 lines)
+│   ├── import-events.js                  ← Event import utility (not in production)
 │   ├── sooon-footer.js                   ← DEPRECATED: replaced by critical + core
 │   ├── event-share.js                    ← DEPRECATED: merged into event-features.js
 │   ├── venue-map.js                      ← DEPRECATED: merged into event-features.js
 │   ├── calendar-export.js                ← DEPRECATED: merged into event-features.js
-│   ├── sooon-hybrid-feed.deprecated.js   ← DEPRECATED: absorbed into sooon-core.js (renderFeedFromCMS)
+│   ├── sooon-hybrid-feed.deprecated.js   ← DEPRECATED: renderFeedFromCMS was reverted (7da8982)
 │   ├── sooon-head.js                     ← Empty (not in use)
 │   ├── sooon-styles.css                  ← Custom styles
 │   └── test.js                           ← Testing (not in production)
@@ -742,11 +748,12 @@ sooon-new-scripts/
 - ✅ Cross-script coordination via `window.sooonFeedReady` flag
 - ✅ Bookmarks with localStorage persistence + favourites list
 - ✅ Card feed empty state shows correctly on 0 filter results
-- ✅ CMS-based card rendering (`renderFeedFromCMS()`) replaces sooon-hybrid-feed.js — commit `bf62b99`
-- 🔄 Webflow script tags still need updating to commit `bf62b99` + remove sooon-hybrid-feed.js embed
+- ✅ Artist switcher works in both feed card and modal (stopPropagation after guards — commit `fc2db02`)
+- ↩️ `renderFeedFromCMS()` (CMS card re-rendering) was developed but reverted — sooon-core.js back to Webflow-native feed (commit `7da8982`)
+- ✅ Artist switcher image/visual fix — selector was matching triggers; now scoped to `.artist-visual` and `.artist-title` only
+- ⏸ `sooon-api.js` — shelved; sticking with Webflow CMS collection
 
 **Planned Enhancements:**
-- Integration of further info via .json endpoint and make.com automation
 - Better UX (animation, interaction, etc.)
 - More specific filters
 
@@ -785,6 +792,6 @@ sooon-new-scripts/
 
 ---
 
-**Document Version:** 5.4
+**Document Version:** 5.5
 **Maintained By:** DanNessler + Claude
-**Last Verified Working:** 2026-02-21 (pre-CMS rendering change — needs re-verification after bf62b99 deploy)
+**Last Verified Working:** 2026-03-01 (post-revert to Webflow-native feed, artist switcher fix `fc2db02`)
