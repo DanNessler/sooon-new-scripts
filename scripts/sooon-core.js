@@ -50,7 +50,7 @@
     return inner;
   }
 
-  // Expose globally so sooon-hybrid-feed.js and sooon-api.js can inject into the right container
+  // Expose globally so other scripts (e.g. sooon-api.js) can inject into the right container
   window.sooonEnsureScrollInner = ensureScrollInnerContainer;
 
   // ── Step 1: Wait for Webflow CMS to finish populating cards ──
@@ -169,7 +169,7 @@
       }).observe(feedEl, { childList: true });
     }
 
-    // Also handle cards injected directly into .card_feed-scroll-inner by sooon-hybrid-feed.js
+    // Also handle cards injected directly into .card_feed-scroll-inner by other scripts
     var innerContainer = document.querySelector('.card_feed-scroll-inner');
     if (innerContainer) {
       new MutationObserver(function(mutations) {
