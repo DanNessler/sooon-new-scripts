@@ -603,17 +603,14 @@ document.addEventListener("DOMContentLoaded", function() {
     e.stopPropagation();
 
     const card = trigger.closest(config.cardSelector) || trigger.closest(config.modalClass);
-    console.log('[Switcher] trigger:', trigger, '| card found:', card);
-    if (!card) { console.warn('[Switcher] no card/modal ancestor found'); return; }
+    if (!card) return;
 
     const artistIdAttr = trigger.getAttribute('data-artist-id');
-    console.log('[Switcher] data-artist-id attr:', artistIdAttr, '| trigger outerHTML:', trigger.outerHTML.slice(0, 200));
-    if (!artistIdAttr) { console.warn('[Switcher] data-artist-id missing on trigger'); return; }
+    if (!artistIdAttr) return;
 
     const artistId = parseInt(artistIdAttr);
 
     const allTaggedElements = card.querySelectorAll('[data-artist-id]');
-    console.log('[Switcher] tagged elements in scope:', allTaggedElements.length);
     allTaggedElements.forEach(el => {
       const elId = parseInt(el.getAttribute('data-artist-id'));
       const title = el.querySelector(config.titleSelector);
