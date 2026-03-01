@@ -10,8 +10,8 @@
 (function() {
   'use strict';
 
-  const EAGER_CARDS = 3;
-  const LOAD_DISTANCE = '200%';
+  const EAGER_CARDS = 1;
+  const LOAD_DISTANCE = '100%';
   let initialized = false;
 
   function waitForCards(callback) {
