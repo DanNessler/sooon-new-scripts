@@ -67,6 +67,8 @@
   }
 
   // --- Intro audio toggle ---
+  console.log('[Kombinat-Critical] toggle el:', toggle, '| circle el:', toggle ? toggle.querySelector('.button-toggle-circle') : 'N/A (no toggle)');
+
   if (toggle) {
     toggle.addEventListener('click', function(e) {
       e.preventDefault();
@@ -74,9 +76,12 @@
       audioEnabled = !audioEnabled;
       setAudioEnabled(audioEnabled);
       syncToggleUI();
+      console.log('[Kombinat-Critical] toggle clicked — audioEnabled:', audioEnabled, '| circle:', toggle.querySelector('.button-toggle-circle'));
       // Notify sooon-core.js of state change
       window.dispatchEvent(new CustomEvent('sooon:audio-changed', { detail: { enabled: audioEnabled } }));
     });
+  } else {
+    console.warn('[Kombinat-Critical] toggle element NOT FOUND — check data-sooon-audio-toggle="true" in Webflow');
   }
 
   // --- "Discover Shows" button ---
