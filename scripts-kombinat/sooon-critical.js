@@ -51,6 +51,7 @@
     toggle.classList.toggle('is-on', audioEnabled);
     if (circle) circle.classList.toggle('is-on', audioEnabled);
     if (label) label.textContent = audioEnabled ? 'ON' : 'OFF';
+    console.log('[Kombinat-Critical] syncToggleUI — audioEnabled:', audioEnabled, '| circle classes:', circle ? circle.className : 'null');
   }
 
   syncToggleUI();
