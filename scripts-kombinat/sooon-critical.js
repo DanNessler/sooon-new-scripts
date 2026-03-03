@@ -48,10 +48,9 @@
   function syncToggleUI() {
     if (!toggle) return;
     var circle = toggle.querySelector('.button-toggle-circle');
-    toggle.classList.toggle('is-on', audioEnabled);
-    if (circle) circle.classList.toggle('is-on', audioEnabled);
+    // Use inline style to override Webflow IX2 which fights classList.toggle('is-on')
+    if (circle) circle.style.transform = audioEnabled ? 'translateX(20px)' : 'translateX(0px)';
     if (label) label.textContent = audioEnabled ? 'ON' : 'OFF';
-    console.log('[Kombinat-Critical] syncToggleUI — audioEnabled:', audioEnabled, '| circle classes:', circle ? circle.className : 'null');
   }
 
   syncToggleUI();
