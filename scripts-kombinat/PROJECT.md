@@ -193,7 +193,7 @@ scripts-kombinat/
 - [ ] Share button — native share on mobile, clipboard fallback on desktop
 - [ ] Map button — opens Google Maps with correct venue + city
 - [ ] Calendar button — downloads .ics file with correct data
-- [ ] Correct event data extracted from open modal (not always first event)
+- [x] Correct event data extracted from open modal (fixed: JS corrects IX2 targeting, sooon-core.js)
 
 ### Bookmarks
 - [ ] Bookmark button in modal toggles icon state

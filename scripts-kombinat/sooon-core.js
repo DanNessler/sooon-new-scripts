@@ -173,14 +173,37 @@ document.addEventListener("DOMContentLoaded", function() {
   };
 
   // ========================================================
-  // MODAL SCROLL LOCK
+  // MODAL OPEN/CLOSE — JS-driven, corrects IX2 targeting
+  // Webflow IX2 may add is-open to the first .event_modal in the DOM
+  // regardless of which card was clicked. We intercept at capture phase,
+  // record which scoped modal should open, then correct after IX2 fires.
   // ========================================================
+  let _pendingModalScope = null;
+
   document.addEventListener('click', function(e) {
-    if (e.target.closest(config.openTrigger)) {
-      setTimeout(() => document.body.classList.add('is-locked'), 50);
+    const openBtn = e.target.closest(config.openTrigger);
+    if (openBtn) {
+      _pendingModalScope = openBtn.closest('.event_modal_scope') || openBtn.closest('.card_feed_item');
+      // After IX2 has had a chance to run, correct which modal is open
+      setTimeout(() => {
+        if (!_pendingModalScope) return;
+        // Close all modals IX2 may have opened
+        document.querySelectorAll('.event_modal.is-open').forEach(m => m.classList.remove('is-open'));
+        // Open only the one in the clicked card's scope
+        const modal = _pendingModalScope.querySelector('.event_modal');
+        if (modal) modal.classList.add('is-open');
+        _pendingModalScope = null;
+        document.body.classList.add('is-locked');
+      }, 20);
+      return;
     }
-    if (e.target.closest(config.closeTrigger)) {
-      document.body.classList.remove('is-locked');
+
+    const closeBtn = e.target.closest(config.closeTrigger);
+    if (closeBtn) {
+      setTimeout(() => {
+        document.querySelectorAll('.event_modal.is-open').forEach(m => m.classList.remove('is-open'));
+        document.body.classList.remove('is-locked');
+      }, 20);
     }
   });
 
