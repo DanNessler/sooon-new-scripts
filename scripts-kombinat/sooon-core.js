@@ -21,7 +21,7 @@
     const check = setInterval(() => {
       const cards = document.querySelectorAll('.card_feed_item');
       attempts++;
-      if (cards.length > 1 || attempts > 40) {
+      if (cards.length >= 1 || attempts > 40) {
         clearInterval(check);
         callback(cards);
       }
@@ -49,7 +49,7 @@
       if (audio.hasAttribute('data-lazy-processed')) return;
       var sources = audio.querySelectorAll('source');
       if (sources.length > 0) {
-        var srcArray = Array.from(sources).map(function(s) { return s.src; });
+        var srcArray = Array.from(sources).map(function(s) { return s.getAttribute('src') || ''; });
         if (srcArray.some(function(s) { return s && s !== ''; })) {
           audio.setAttribute('data-src', JSON.stringify(srcArray));
           sources.forEach(function(s) { s.remove(); });
