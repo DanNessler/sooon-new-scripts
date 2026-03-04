@@ -218,6 +218,14 @@ scripts-kombinat/
 - Finsweet v2 removes items from DOM (not `display: none`) — use `childList: true` in MutationObserver
 - Slug sources: modal uses `[data-event-slug-source="true"]`, feed cards use that or `[data-feed-slug="true"]`
 
+## Open Issues
+
+### Intro toggle `is-on` class overridden by Webflow (TODO)
+- **Symptom:** `.button-toggle-circle` has `is-on` permanently added back by Webflow's runtime after our script removes it, even with no IX2 interaction set on the element
+- **Root cause (suspected):** A Webflow page-level interaction (Page Load / While Page is Loading trigger) targeting `.button-toggle-circle` or `.button-toggle` is setting `is-on` after our script runs — this does not happen on the main sooon page
+- **Current workaround:** `syncToggleUI()` drives circle position via inline `style.left` / `style.right` instead of the `is-on` combo class, which overrides the CSS regardless of class state
+- **To fix:** Check Webflow Designer → Interactions panel → Page Triggers for any load animation targeting this element. Remove or reconcile it so JS class toggling works as intended and the inline style workaround can be removed
+
 ---
 
 **Document Version:** 1.0 (Kombinat2026)
