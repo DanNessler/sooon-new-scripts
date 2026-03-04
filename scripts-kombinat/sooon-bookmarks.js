@@ -85,6 +85,9 @@
   // ── State ──
   let bookmarks = readBookmarks();
 
+  // Track the slug of the last-opened modal (set when user clicks modal open trigger)
+  let activeModalSlug = null;
+
   function isBookmarked(slug) {
     return bookmarks.indexOf(slug) !== -1;
   }
@@ -107,11 +110,16 @@
   // ── Slug helpers ──
 
   /**
-   * Get the slug from the currently open modal.
-   * Mirrors event-share.js: find .event_modal.is-open → parent
-   * .event_modal_scope → [data-event-slug-source] textContent.
+   * Get the slug for the currently open modal.
+   * Uses activeModalSlug (set when the modal open trigger is clicked) as the
+   * primary source, since Webflow IX2 may use a shared modal overlay that is
+   * not nested inside the per-item .event_modal_scope.
+   * Falls back to DOM traversal for cases where the modal IS nested.
    */
   function getCurrentSlug() {
+    if (activeModalSlug) return activeModalSlug;
+
+    // Fallback: traverse DOM (works when modal is inside its scope)
     const openModal = document.querySelector(SEL.openModal);
     if (!openModal) return null;
 
@@ -281,6 +289,28 @@
     updateFeedIndicators();
     populateFavourites();
   }
+
+  // ── Track active modal slug from the card that triggered the open ──
+  // Webflow IX2 may use a shared modal overlay (not nested per CMS item),
+  // so we capture the slug at click time from the triggering card's scope.
+  document.addEventListener('click', function (e) {
+    const trigger = e.target.closest('.modal-open-button, .modal-open-hitarea');
+    if (!trigger) return;
+
+    const scope = trigger.closest(SEL.modalScope);
+    if (!scope) return;
+
+    const el = scope.querySelector(SEL.slugSource) || scope.querySelector(SEL.feedSlug);
+    activeModalSlug = el ? (el.textContent.trim() || null) : null;
+    console.log(LOG, 'Modal opened for slug:', activeModalSlug);
+  }, true); // capture phase — runs before Webflow handlers
+
+  // Clear active slug when modal closes
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('.modal-close-button')) {
+      activeModalSlug = null;
+    }
+  });
 
   // ── Debounce for rapid clicks ──
   let toggleLock = false;
