@@ -290,18 +290,41 @@
     populateFavourites();
   }
 
-  // ── Track active modal slug from the card that triggered the open ──
-  // Webflow IX2 may use a shared modal overlay (not nested per CMS item),
-  // so we capture the slug at click time from the triggering card's scope.
+  // ── Track active modal slug ──
+  // The modal open trigger may live OUTSIDE the CMS collection list (moved in
+  // Webflow designer), so we cannot use .closest() to find the scope.
+  // Instead: at click time, find the currently visible card by checking
+  // which .card_feed_item most overlaps the viewport center, then read its slug.
+  function getVisibleCardSlug() {
+    const cards = document.querySelectorAll(SEL.feedCard);
+    const midY = window.innerHeight / 2;
+    let best = null;
+    let bestDist = Infinity;
+    cards.forEach(function (card) {
+      const r = card.getBoundingClientRect();
+      const cardMid = (r.top + r.bottom) / 2;
+      const dist = Math.abs(cardMid - midY);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = card;
+      }
+    });
+    return best ? getCardSlug(best) : null;
+  }
+
   document.addEventListener('click', function (e) {
     const trigger = e.target.closest('.modal-open-button, .modal-open-hitarea');
     if (!trigger) return;
 
+    // Try scope-based lookup first (works if trigger is inside .event_modal_scope)
     const scope = trigger.closest(SEL.modalScope);
-    if (!scope) return;
-
-    const el = scope.querySelector(SEL.slugSource) || scope.querySelector(SEL.feedSlug);
-    activeModalSlug = el ? (el.textContent.trim() || null) : null;
+    if (scope) {
+      const el = scope.querySelector(SEL.slugSource) || scope.querySelector(SEL.feedSlug);
+      activeModalSlug = el ? (el.textContent.trim() || null) : null;
+    } else {
+      // Trigger is outside the CMS list — identify current card by viewport position
+      activeModalSlug = getVisibleCardSlug();
+    }
     console.log(LOG, 'Modal opened for slug:', activeModalSlug);
   }, true); // capture phase — runs before Webflow handlers
 
