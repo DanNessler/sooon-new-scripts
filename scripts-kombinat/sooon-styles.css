@@ -36,10 +36,14 @@ body.is-locked .card_feed-wrapper {
   }
 }
 /* Hide all scrollbars */
-* {
+html, body, * {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
 }
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
 *::-webkit-scrollbar {
   display: none; /* Chrome/Safari/WebKit */
+  width: 0;
+  height: 0;
 }
