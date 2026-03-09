@@ -28,3 +28,9 @@ body.is-locked .card_feed-wrapper {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* Fix: right dropdown list appearing behind left button on mobile */
+@media (max-width: 479px) {
+  .filter_screen .w-dropdown {
+    position: static !important;
+  }
+}
