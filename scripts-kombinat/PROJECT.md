@@ -220,6 +220,19 @@ scripts-kombinat/
 
 ## Open Issues
 
+### Filter screen: right dropdown list hidden behind left button on mobile (TODO)
+- **Symptom:** On mobile, when the right dropdown (Time) is open, the left dropdown button (Location) appears on top of the open list
+- **Root cause:** Webflow sets `position: relative` on `.w-dropdown` via its own stylesheet, making each wrapper the containing block for its own list. The left wrapper creates a stacking context that paints above the right list.
+- **Attempts so far:**
+  - Added `z-index: 200` to `dropdown2_dropdown-list` on tiny breakpoint — insufficient, list is still trapped inside its containing block
+  - Removed `z-index: 10` from `dropdown2_component` on tiny — no effect
+  - Removed `z-index: 10` from `mobile-left` combo class on tiny — no effect
+  - Removed `z-index: 1` from `dropdown_button` on tiny — no effect
+  - CSS: `.filter_screen .w-dropdown { position: static !important }` — broke Webflow dropdown JS positioning entirely
+  - CSS: `.filter_screen .w-dropdown.w--open { z-index: 100 !important }` — no effect (commit `e4e86df`)
+- **Suspected remaining cause:** Webflow's own JS may be setting inline `z-index` on `.w-dropdown` at open time, overriding our CSS. Or the stacking context chain from `filter_screen` (z-index: 600, position: fixed) is interfering in an unexpected way.
+- **To investigate:** Inspect the live DOM in browser devtools while the right dropdown is open — check computed z-index and stacking context on `.w-dropdown`, `.w-dropdown-toggle`, and `.w-dropdown-list` elements, and look for any inline styles set by Webflow JS
+
 ### Intro toggle `is-on` class overridden by Webflow (TODO)
 - **Symptom:** `.button-toggle-circle` has `is-on` permanently added back by Webflow's runtime after our script removes it, even with no IX2 interaction set on the element
 - **Root cause (suspected):** A Webflow page-level interaction (Page Load / While Page is Loading trigger) targeting `.button-toggle-circle` or `.button-toggle` is setting `is-on` after our script runs — this does not happen on the main sooon page
