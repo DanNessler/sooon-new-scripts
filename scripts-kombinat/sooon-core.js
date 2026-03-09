@@ -353,29 +353,24 @@ document.addEventListener("DOMContentLoaded", function() {
 // FILTER-TO-FEED LINKING
 // ========================================================
 
-// Track whether a native <select> inside filter_screen was open.
-// Native selects fire "change" (or blur) before the outside click propagates,
-// so we can suppress the click if a select just lost focus.
-let filterSelectJustClosed = false;
-document.addEventListener("focusout", function(e) {
-  if (e.target.tagName === "SELECT" && e.target.closest(".filter_screen")) {
-    filterSelectJustClosed = true;
-    // Reset after a tick — the click event fires synchronously after focusout
-    setTimeout(() => { filterSelectJustClosed = false; }, 0);
+// Prevent a Webflow dropdown "close on outside click" from also triggering
+// list items layered below. Webflow adds .w--open to .dropdown2_component
+// while open. On mousedown outside the open dropdown, Webflow closes it —
+// we detect this at mousedown time and cancel the event so no click fires.
+document.addEventListener("mousedown", function(e) {
+  const item = e.target.closest(".stacked-list2_item[data-target-slug]");
+  if (!item) return;
+
+  const openDropdown = document.querySelector(".filter_screen .dropdown2_component.w--open");
+  if (openDropdown && !openDropdown.contains(e.target)) {
+    // This mousedown will close the dropdown — eat it so no click fires on the list item.
+    e.preventDefault();
   }
 }, true);
 
 document.addEventListener("click", function(e) {
   const item = e.target.closest(".stacked-list2_item[data-target-slug]");
   if (!item) return;
-
-  // If a filter dropdown just closed, eat this click — it was only meant to close the select.
-  if (filterSelectJustClosed) {
-    e.preventDefault();
-    e.stopPropagation();
-    filterSelectJustClosed = false;
-    return;
-  }
 
   e.preventDefault();
 
