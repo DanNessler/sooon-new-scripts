@@ -113,7 +113,16 @@ All keys namespaced to `kombinat_` to avoid conflicts with the main sooon platfo
 
 ## Scripts
 
-### Load Order (Webflow Before `</body>`)
+### Load Order
+
+**Head (Webflow Page Settings → Custom Code → `<head>`):**
+
+```html
+<!-- Styles -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/DanNessler/sooon-new-scripts@{COMMIT_HASH}/scripts-kombinat/sooon-styles.css">
+```
+
+**Before `</body>` (Webflow Page Settings → Custom Code → Before `</body>`):**
 
 ```html
 <!-- Critical: intro screen works immediately -->
