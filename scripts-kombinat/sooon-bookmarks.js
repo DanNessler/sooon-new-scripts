@@ -266,12 +266,15 @@
 
   // ── Event: Bookmark toggle button click ──
   // Slug comes directly from CMS-bound [data-bookmark-slug] on the button.
+  // Uses capture phase + stopImmediatePropagation to prevent Webflow IX2
+  // (which also listens at document level) from seeing the click and
+  // re-triggering a modal-open interaction on the parent card.
   document.addEventListener('click', function (e) {
     const btn = e.target.closest(SEL.toggleBtn);
     if (!btn) return;
 
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
 
     const slug = (btn.getAttribute('data-bookmark-slug') || '').trim();
     if (!slug) {
@@ -286,7 +289,7 @@
     }
 
     syncAll(slug);
-  });
+  }, true);
 
   // ── Initial sync on page load ──
   function waitForCardsAndInit() {

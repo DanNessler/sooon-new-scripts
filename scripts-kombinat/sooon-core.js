@@ -176,10 +176,6 @@ document.addEventListener("DOMContentLoaded", function() {
   // MODAL SCROLL LOCK
   // ========================================================
   document.addEventListener('click', function(e) {
-    // Ignore clicks on bookmark/share/calendar/map action buttons — they live
-    // inside .modal-open-hitarea but must NOT re-trigger the open logic.
-    if (e.target.closest('[data-bookmark-action], [data-share-action], [data-calendar-action], [data-map-action]')) return;
-
     if (e.target.closest(config.openTrigger)) {
       setTimeout(() => document.body.classList.add('is-locked'), 50);
     }
