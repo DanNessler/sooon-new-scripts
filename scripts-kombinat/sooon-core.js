@@ -353,18 +353,34 @@ document.addEventListener("DOMContentLoaded", function() {
 // FILTER-TO-FEED LINKING
 // ========================================================
 
-// Prevent a Webflow dropdown "close on outside click" from also triggering
-// list items layered below. Webflow adds .w--open to .dropdown2_component
-// while open. On mousedown outside the open dropdown, Webflow closes it —
-// we detect this at mousedown time and cancel the event so no click fires.
+// Prevent a Webflow IX2-controlled dropdown "close on outside click" from
+// also triggering list items layered below.
+// Since IX2 doesn't use w--open, we track open state ourselves:
+// a click on .w-dropdown-toggle toggles the open flag; a click anywhere
+// outside .w-dropdown clears it. On mousedown on a list item while a
+// dropdown is open, we cancel the event so no click fires.
+let filterDropdownOpen = false;
+
+document.addEventListener("click", function(e) {
+  const toggle = e.target.closest(".filter_screen .w-dropdown-toggle");
+  const dropdown = e.target.closest(".filter_screen .w-dropdown");
+
+  if (toggle) {
+    filterDropdownOpen = !filterDropdownOpen;
+  } else if (!dropdown) {
+    // Click outside any dropdown — IX2 will close it
+    filterDropdownOpen = false;
+  }
+}, true);
+
 document.addEventListener("mousedown", function(e) {
   const item = e.target.closest(".stacked-list2_item[data-target-slug]");
   if (!item) return;
 
-  const openDropdown = document.querySelector(".filter_screen .dropdown2_component.w--open");
-  if (openDropdown && !openDropdown.contains(e.target)) {
+  if (filterDropdownOpen && !e.target.closest(".filter_screen .w-dropdown")) {
     // This mousedown will close the dropdown — eat it so no click fires on the list item.
     e.preventDefault();
+    filterDropdownOpen = false;
   }
 }, true);
 
