@@ -367,15 +367,18 @@ document.addEventListener("click", function(e) {
   }
 }, true);
 
-document.addEventListener("mousedown", function(e) {
+function onPointerOutsideDropdown(e) {
   if (!filterDropdownOpen) return;
   if (e.target.closest(".filter_screen .w-dropdown")) return;
 
-  // A dropdown is open and user clicked outside it — it will close.
+  // A dropdown is open and user pressed outside it — it will close.
   // Set flag so the subsequent click event on any list item is suppressed.
   filterDropdownOpen = false;
   filterDropdownJustClosed = true;
-}, true);
+}
+
+document.addEventListener("mousedown", onPointerOutsideDropdown, true);
+document.addEventListener("touchstart", onPointerOutsideDropdown, { capture: true, passive: true });
 
 document.addEventListener("click", function(e) {
   const item = e.target.closest(".stacked-list2_item[data-target-slug]");
