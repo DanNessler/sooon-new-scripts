@@ -133,8 +133,14 @@
     };
   }
 
-  // ── UI: Modal bookmark button icons ──
-  // Finds the bookmark button in the open modal and updates icon visibility.
+  // ── UI: Modal bookmark button icons + label ──
+  // Finds the bookmark button in the open modal and updates icon visibility
+  // and the optional text label.
+  //
+  // Label setup in Webflow (all optional — script degrades gracefully):
+  //   • On the button: data-bookmark-label-inactive="Save show"
+  //                    data-bookmark-label-active="Saved show"
+  //   • Inside the button: a child element with data-bookmark-label (any tag)
   function updateModalButton(slug) {
     const btn = document.querySelector(SEL.openModal + ' ' + SEL.toggleBtn)
              || document.querySelector(SEL.toggleBtn + '[data-bookmark-slug="' + slug + '"]');
@@ -143,14 +149,21 @@
     const container = btn.closest(SEL.modalScope) || btn.parentElement;
     const inactive = container.querySelector(SEL.iconInactive);
     const active   = container.querySelector(SEL.iconActive);
-    if (!inactive || !active) return;
 
-    if (isBookmarked(slug)) {
-      active.classList.remove('is-hidden');
-      inactive.classList.add('is-hidden');
-    } else {
-      active.classList.add('is-hidden');
-      inactive.classList.remove('is-hidden');
+    const saved = isBookmarked(slug);
+
+    if (inactive && active) {
+      active.classList.toggle('is-hidden', !saved);
+      inactive.classList.toggle('is-hidden', saved);
+    }
+
+    // Update text label if present
+    const labelEl = btn.querySelector('[data-bookmark-label]');
+    if (labelEl) {
+      const text = saved
+        ? (btn.getAttribute('data-bookmark-label-active')   || 'Saved show')
+        : (btn.getAttribute('data-bookmark-label-inactive') || 'Save show');
+      labelEl.textContent = text;
     }
   }
 
