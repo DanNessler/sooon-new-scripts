@@ -9,14 +9,22 @@
   var KEY_SEEN  = 'kombinat_onboarding_seen';
   var KEY_AUDIO = 'kombinat_audio_enabled';
 
-  function getSeen()  { return localStorage.getItem(KEY_SEEN) === '1'; }
-  function setSeen()  { localStorage.setItem(KEY_SEEN, '1'); }
+  // Safe localStorage wrappers — iOS Safari private mode throws on access
+  function lsGet(key) {
+    try { return localStorage.getItem(key); } catch(_) { return null; }
+  }
+  function lsSet(key, val) {
+    try { localStorage.setItem(key, val); } catch(_) {}
+  }
+
+  function getSeen()  { return lsGet(KEY_SEEN) === '1'; }
+  function setSeen()  { lsSet(KEY_SEEN, '1'); }
 
   function getAudioEnabled() {
-    var v = localStorage.getItem(KEY_AUDIO);
+    var v = lsGet(KEY_AUDIO);
     return v === null ? true : v === '1'; // default ON
   }
-  function setAudioEnabled(on) { localStorage.setItem(KEY_AUDIO, on ? '1' : '0'); }
+  function setAudioEnabled(on) { lsSet(KEY_AUDIO, on ? '1' : '0'); }
 
   // --- Deep link + first visit detection ---
   var hasDeepLink = window.location.hash.startsWith('#event-');
@@ -24,7 +32,7 @@
   var deepLinkFirstVisit = hasDeepLink && isFirstVisit;
 
   // Audio default: OFF for deep link first visitors, ON otherwise
-  if (localStorage.getItem(KEY_AUDIO) === null) {
+  if (lsGet(KEY_AUDIO) === null) {
     setAudioEnabled(!deepLinkFirstVisit);
   }
 
