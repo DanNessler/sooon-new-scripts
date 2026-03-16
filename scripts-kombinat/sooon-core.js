@@ -185,6 +185,38 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 
   // ========================================================
+  // MODAL CLOSE ON SWIPE DOWN
+  // Detects a deliberate downward swipe on .modal_close_swipe
+  // and triggers the same close logic as .modal-close-button
+  // ========================================================
+  (function() {
+    var swipeStartY = null;
+    var swipeStartX = null;
+
+    document.addEventListener('touchstart', function(e) {
+      if (!e.target.closest('.modal_close_swipe')) return;
+      var t = e.touches[0];
+      swipeStartY = t.clientY;
+      swipeStartX = t.clientX;
+    }, { passive: true });
+
+    document.addEventListener('touchend', function(e) {
+      if (swipeStartY === null) return;
+      var t = e.changedTouches[0];
+      var deltaY = t.clientY - swipeStartY;
+      var deltaX = t.clientX - swipeStartX;
+      swipeStartY = null;
+      swipeStartX = null;
+
+      // Require a downward swipe of at least 50px that is more vertical than horizontal
+      if (deltaY < 50 || Math.abs(deltaX) > Math.abs(deltaY)) return;
+
+      var closeBtn = document.querySelector(config.closeTrigger);
+      if (closeBtn) closeBtn.click();
+    }, { passive: true });
+  })();
+
+  // ========================================================
   // AUDIO STATE
   // ========================================================
   let audioEnabled = getAudioEnabled();
