@@ -226,7 +226,7 @@
   };
 
   function getOpenModalScope() {
-    const openModal = document.querySelector('.event_modal.is-open');
+    const openModal = document.querySelector('.event_modal.anim-start-in');
     if (!openModal) return null;
     const scope = openModal.closest('.event_modal_scope');
     return scope ? { openModal, scope } : null;
@@ -267,13 +267,17 @@
       if (fallback) dateText = fallback.textContent.trim();
     }
 
-    // Read ISO datetime from hidden .iso_date element (CMS Date Start field, includes time)
-    const isoDateEl = scope.querySelector('.iso_date');
-    const isoDate = isoDateEl ? isoDateEl.textContent.trim() : '';
-
-    // Read ISO datetime from element bound to date-end CMS field
-    const isoDateEndEl = scope.querySelector('[fs-list-field="date-end"]');
-    const isoDateEnd = isoDateEndEl ? isoDateEndEl.textContent.trim() : '';
+    // Read start/end times from the rendered detail text paragraphs in the first card
+    // Structure: event_modal_detail_card_inner_wrapper > event_modal_detail_content_left_wrapper
+    //            > event_modal_detail_text[0]=start, [1]=separator, [2]=end
+    let startTimeText = '';
+    let endTimeText = '';
+    const firstCard = scope.querySelector('.event_modal_detail_card_inner_wrapper');
+    if (firstCard) {
+      const timeEls = firstCard.querySelectorAll('.event_modal_detail_text');
+      if (timeEls[0]) startTimeText = timeEls[0].textContent.trim();
+      if (timeEls[2]) endTimeText   = timeEls[2].textContent.trim();
+    }
 
     const slugEl = scope.querySelector(CONFIG.slugSource);
     const slug = slugEl ? slugEl.textContent.trim() : '';
@@ -281,11 +285,11 @@
     return {
       activeArtist,
       allArtists,
-      venue:    (scope.querySelector(CONFIG.venue) || { textContent: '' }).textContent.trim(),
-      city:     (scope.querySelector(CONFIG.city)  || { textContent: '' }).textContent.trim(),
+      venue:        (scope.querySelector(CONFIG.venue) || { textContent: '' }).textContent.trim(),
+      city:         (scope.querySelector(CONFIG.city)  || { textContent: '' }).textContent.trim(),
       dateText,
-      isoDate,
-      isoDateEnd,
+      startTimeText,
+      endTimeText,
       slug,
     };
   }
@@ -308,16 +312,20 @@
     return isNaN(native.getTime()) ? null : native;
   }
 
-  // Format an ISO datetime string (UTC) as a local-time ICS stamp: YYYYMMDDTHHmmss
-  function isoToICS(isoStr) {
-    if (!isoStr) return null;
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return null;
-    return d.getUTCFullYear()
-      + String(d.getUTCMonth() + 1).padStart(2, '0')
-      + String(d.getUTCDate()).padStart(2, '0')
-      + 'T' + String(d.getUTCHours()).padStart(2, '0')
-      + String(d.getUTCMinutes()).padStart(2, '0') + '00';
+  // Parse "4:00 pm" / "21:00" into { h, min }, or null if unrecognised
+  function parseTimeText(t) {
+    if (!t) return null;
+    t = t.trim().toLowerCase();
+    let m = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+    if (m) {
+      let h = parseInt(m[1]), min = m[2] ? parseInt(m[2]) : 0;
+      if (m[3] === 'pm' && h !== 12) h += 12;
+      if (m[3] === 'am' && h === 12) h = 0;
+      return { h, min };
+    }
+    m = t.match(/^(\d{1,2}):(\d{2})$/);
+    if (m) return { h: parseInt(m[1]), min: parseInt(m[2]) };
+    return null;
   }
 
   function fmtICS(date, h, min) {
@@ -332,24 +340,18 @@
   }
 
   function generateICS(data) {
-    // Use ISO datetime from CMS (includes exact start time); fall back to parsed date text + default hour
-    const dtStart = isoToICS(data.isoDate) || (function() {
-      const d = parseDate(data.dateText) || new Date();
-      return fmtICS(d, CONFIG.defaultStartHour, CONFIG.defaultStartMinute);
-    })();
+    const eventDate = parseDate(data.dateText) || new Date();
 
-    // Use ISO end datetime from CMS; fall back to start + defaultDurationHours
-    let dtEnd = isoToICS(data.isoDateEnd);
-    if (!dtEnd) {
-      const startParsed = new Date(data.isoDate);
-      if (!isNaN(startParsed.getTime())) {
-        const endParsed = new Date(startParsed.getTime() + CONFIG.defaultDurationHours * 3600000);
-        dtEnd = isoToICS(endParsed.toISOString());
-      } else {
-        const d = parseDate(data.dateText) || new Date();
-        dtEnd = fmtICS(d, CONFIG.defaultStartHour + CONFIG.defaultDurationHours, CONFIG.defaultStartMinute);
-      }
-    }
+    const startT = parseTimeText(data.startTimeText);
+    const startH   = startT ? startT.h   : CONFIG.defaultStartHour;
+    const startMin = startT ? startT.min  : CONFIG.defaultStartMinute;
+
+    const endT = parseTimeText(data.endTimeText);
+    const endH   = endT ? endT.h   : startH + CONFIG.defaultDurationHours;
+    const endMin = endT ? endT.min  : startMin;
+
+    const dtStart = fmtICS(eventDate, startH, startMin);
+    const dtEnd   = fmtICS(eventDate, endH,   endMin);
     const summary  = data.activeArtist ? data.activeArtist + ' live at ' + data.venue : data.venue || 'sooon Event';
     const location = data.city ? data.venue + ', ' + data.city : data.venue;
     const artistLine = data.allArtists.length ? data.allArtists.join(' + ') : data.activeArtist;
