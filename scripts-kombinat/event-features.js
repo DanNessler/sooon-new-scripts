@@ -356,7 +356,7 @@
     const location = data.city ? data.venue + ', ' + data.city : data.venue;
     const artistLine = data.allArtists.length ? data.allArtists.join(' + ') : data.activeArtist;
     const description = artistLine + ' live at ' + data.venue
-      + '  Check the playing times on the venue`s website, enjoy the show and find more events on https://sooon-new.webflow.io';
+      + '  Enjoy the show at Kombinat, check https://daskombinat.org for potential changes and https://about.sooon.live/kombinat2026 for more shows.';
 
     return [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:' + CONFIG.prodId, 'CALSCALE:GREGORIAN',
