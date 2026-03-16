@@ -271,8 +271,8 @@
     const isoDateEl = scope.querySelector('.iso_date');
     const isoDate = isoDateEl ? isoDateEl.textContent.trim() : '';
 
-    // Read ISO datetime from hidden .iso_date_end element (CMS Date End field)
-    const isoDateEndEl = scope.querySelector('.iso_date_end');
+    // Read ISO datetime from element bound to date-end CMS field
+    const isoDateEndEl = scope.querySelector('[fs-list-field="date-end"]');
     const isoDateEnd = isoDateEndEl ? isoDateEndEl.textContent.trim() : '';
 
     const slugEl = scope.querySelector(CONFIG.slugSource);
