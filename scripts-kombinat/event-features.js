@@ -226,7 +226,7 @@
   };
 
   function getOpenModalScope() {
-    const openModal = document.querySelector('.event_modal.anim-start-in');
+    const openModal = document.querySelector('.event_modal.is-open');
     if (!openModal) return null;
     const scope = openModal.closest('.event_modal_scope');
     return scope ? { openModal, scope } : null;
