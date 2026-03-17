@@ -186,33 +186,103 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // ========================================================
   // MODAL CLOSE ON SWIPE DOWN
-  // Detects a deliberate downward swipe on .modal_close_swipe
-  // and triggers the same close logic as .modal-close-button
+  // Tracks a downward drag on .modal_close_swipe, animates the
+  // modal sheet in real-time, and commits a dismiss (iOS-style
+  // slide-out) when the drag exceeds the threshold, or snaps
+  // back if the user lets go too early.
   // ========================================================
   (function() {
-    var swipeStartY = null;
-    var swipeStartX = null;
+    var COMMIT_THRESHOLD  = 120; // px — minimum drag distance to dismiss
+    var COMMIT_VELOCITY   = 0.5; // px/ms — fast flick also dismisses
+    var SLIDE_OUT_DURATION = 340; // ms — iOS-sheet exit duration
+
+    var startY = null;
+    var startX = null;
+    var startTime = null;
+    var activeModal = null;
+    var dragging = false;
+
+    function getModal() {
+      return document.querySelector('.event_modal.is-open');
+    }
+
+    function setTranslate(modal, dy) {
+      modal.style.transition = 'none';
+      modal.style.transform  = 'translateY(' + Math.max(0, dy) + 'px)';
+    }
+
+    function snapBack(modal) {
+      modal.style.transition = 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)';
+      modal.style.transform  = 'translateY(0)';
+      modal.addEventListener('transitionend', function cleanup() {
+        modal.removeEventListener('transitionend', cleanup);
+        modal.style.transition = '';
+        modal.style.transform  = '';
+      });
+    }
+
+    function slideOut(modal) {
+      var viewH = window.innerHeight;
+      modal.style.transition = 'transform ' + SLIDE_OUT_DURATION + 'ms cubic-bezier(0.32, 0.72, 0, 1)';
+      modal.style.transform  = 'translateY(' + viewH + 'px)';
+      modal.addEventListener('transitionend', function cleanup() {
+        modal.removeEventListener('transitionend', cleanup);
+        modal.style.transition = '';
+        modal.style.transform  = '';
+        var closeBtn = document.querySelector(config.closeTrigger);
+        if (closeBtn) closeBtn.click();
+      });
+    }
 
     document.addEventListener('touchstart', function(e) {
       if (!e.target.closest('.modal_close_swipe')) return;
+      var modal = getModal();
+      if (!modal) return;
       var t = e.touches[0];
-      swipeStartY = t.clientY;
-      swipeStartX = t.clientX;
+      startY      = t.clientY;
+      startX      = t.clientX;
+      startTime   = Date.now();
+      activeModal = modal;
+      dragging    = false;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+      if (startY === null || !activeModal) return;
+      var t  = e.touches[0];
+      var dy = t.clientY - startY;
+      var dx = t.clientX - startX;
+
+      // Lock axis on first significant movement
+      if (!dragging) {
+        if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
+        // Abandon if primarily horizontal
+        if (Math.abs(dx) > Math.abs(dy)) { startY = null; return; }
+        dragging = true;
+      }
+
+      if (dy > 0) setTranslate(activeModal, dy);
     }, { passive: true });
 
     document.addEventListener('touchend', function(e) {
-      if (swipeStartY === null) return;
-      var t = e.changedTouches[0];
-      var deltaY = t.clientY - swipeStartY;
-      var deltaX = t.clientX - swipeStartX;
-      swipeStartY = null;
-      swipeStartX = null;
+      if (startY === null || !activeModal) return;
+      var t        = e.changedTouches[0];
+      var dy       = t.clientY - startY;
+      var elapsed  = Date.now() - startTime;
+      var velocity = elapsed > 0 ? dy / elapsed : 0;
+      var modal    = activeModal;
 
-      // Require a downward swipe of at least 50px that is more vertical than horizontal
-      if (deltaY < 50 || Math.abs(deltaX) > Math.abs(deltaY)) return;
+      startY      = null;
+      startX      = null;
+      startTime   = null;
+      activeModal = null;
+      dragging    = false;
 
-      var closeBtn = document.querySelector(config.closeTrigger);
-      if (closeBtn) closeBtn.click();
+      if (dy < 10) { snapBack(modal); return; }
+      if (dy >= COMMIT_THRESHOLD || velocity >= COMMIT_VELOCITY) {
+        slideOut(modal);
+      } else {
+        snapBack(modal);
+      }
     }, { passive: true });
   })();
 
