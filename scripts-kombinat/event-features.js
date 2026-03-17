@@ -221,7 +221,7 @@
     defaultStartMinute:   0,
     defaultDurationMinutes: 45,
     prodId:  '-//sooon//Event Calendar//EN',
-    baseUrl: 'https://sooon-new.webflow.io/'
+    baseUrl: 'https://about.sooon.live/kombinat2026'
   };
 
   const MONTH_MAP = {
@@ -233,16 +233,21 @@
 
   function getOpenModalScope(trigger) {
     // Walk up from the clicked button to find the containing modal and its scope.
-    // This is more reliable than document.querySelector('.is-open') which always
-    // returns the first matching element in DOM order regardless of which is visible.
     if (trigger) {
+      // Button is inside the modal element itself
       const openModal = trigger.closest('.event_modal');
       if (openModal) {
         const scope = openModal.closest('.event_modal_scope');
         if (scope) return { openModal, scope };
       }
+      // Button is inside the scope but outside the modal element (e.g. footer area)
+      const scope = trigger.closest('.event_modal_scope');
+      if (scope) {
+        const openModal = scope.querySelector('.event_modal.is-open');
+        if (openModal) return { openModal, scope };
+      }
     }
-    // Fallback: find by is-open class
+    // Last resort: first open modal in the document
     const openModal = document.querySelector('.event_modal.is-open');
     if (!openModal) return null;
     const scope = openModal.closest('.event_modal_scope');
@@ -254,9 +259,9 @@
     return el ? el.textContent.trim() : '';
   }
 
-  function getAllArtists(scope) {
+  function getAllArtists(openModal) {
     const names = [];
-    scope.querySelectorAll(CONFIG.allArtists).forEach(function(el) {
+    openModal.querySelectorAll(CONFIG.allArtists).forEach(function(el) {
       const name = el.textContent.trim();
       if (name && names.indexOf(name) === -1) names.push(name);
     });
@@ -269,7 +274,7 @@
 
     const { openModal, scope } = modal;
     let activeArtist = getActiveArtist(openModal);
-    let allArtists = getAllArtists(scope);
+    let allArtists = getAllArtists(openModal);
     if (!allArtists.length && activeArtist) allArtists = [activeArtist];
     if (!activeArtist && allArtists.length) activeArtist = allArtists[0];
 
@@ -373,7 +378,7 @@
     const location = data.city ? data.venue + ', ' + data.city : data.venue;
     const artistLine = data.allArtists.length ? data.allArtists.join(' + ') : data.activeArtist;
     const description = artistLine + ' live at ' + data.venue
-      + '  Enjoy the show at Kombinat, check https://daskombinat.org for potential changes and https://about.sooon.live/kombinat2026 for more shows.';
+      + '  . Enjoy the show at Kombinat, check https://daskombinat.org for potential changes and https://about.sooon.live/kombinat2026 for more shows.';
 
     return [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:' + CONFIG.prodId, 'CALSCALE:GREGORIAN',
