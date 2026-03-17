@@ -1,15 +1,16 @@
- /* the scrolling container */
+ /* the scrolling container — offset up behind iOS status bar */
 .card_feed-wrapper{
-  height: 100vh;
+  height: calc(100dvh + env(safe-area-inset-top));
+  margin-top: calc(-1 * env(safe-area-inset-top));
   overflow-y: auto;
   overflow-x: hidden;
   scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
-/* each full-screen CMS item is a snap point */
+/* each full-screen CMS item is a snap point — tall enough to fill incl. status bar */
 .card_feed_item{
-  height: 100vh;
+  height: calc(100dvh + env(safe-area-inset-top));
   scroll-snap-align: start;
   scroll-snap-stop: always;
 }
