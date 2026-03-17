@@ -5,6 +5,15 @@
 (function() {
   'use strict';
 
+  // --- Extend page edge-to-edge behind iOS status bar + home indicator ---
+  var vp = document.querySelector('meta[name="viewport"]');
+  if (vp) {
+    var content = vp.getAttribute('content') || '';
+    if (!content.includes('viewport-fit')) {
+      vp.setAttribute('content', content + ', viewport-fit=cover');
+    }
+  }
+
   // --- Storage keys ---
   var KEY_SEEN  = 'kombinat_onboarding_seen';
   var KEY_AUDIO = 'kombinat_audio_enabled';
