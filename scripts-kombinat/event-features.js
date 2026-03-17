@@ -17,11 +17,17 @@
     slugSource: '[data-event-slug-source="true"]',
   };
 
-  function getEventData() {
-    const openModal = document.querySelector('.event_modal.is-open');
-    if (!openModal) return null;
-
-    const scope = openModal.closest('.event_modal_scope');
+  function getEventData(trigger) {
+    let openModal, scope;
+    if (trigger) {
+      openModal = trigger.closest('.event_modal');
+      scope = openModal ? openModal.closest('.event_modal_scope') : null;
+    }
+    if (!openModal || !scope) {
+      openModal = document.querySelector('.event_modal.is-open');
+      if (!openModal) return null;
+      scope = openModal.closest('.event_modal_scope');
+    }
     if (!scope) return null;
 
     const slug = scope.querySelector(config.slugSource);
@@ -147,7 +153,7 @@
       e.preventDefault();
       e.stopPropagation();
 
-      const data = getEventData();
+      const data = getEventData(btn);
       if (!data) { console.error('[Kombinat-Share] Failed to extract event data'); return; }
 
       shareEvent(buildShareText(data, btn.getAttribute('data-share-template')), buildDeepLink(data.slug));
@@ -213,7 +219,7 @@
     slugSource:     '[data-event-slug-source="true"]',
     defaultStartHour:     20,
     defaultStartMinute:   0,
-    defaultDurationHours: 3,
+    defaultDurationMinutes: 45,
     prodId:  '-//sooon//Event Calendar//EN',
     baseUrl: 'https://sooon-new.webflow.io/'
   };
@@ -225,7 +231,18 @@
     oktober:9, dezember:11
   };
 
-  function getOpenModalScope() {
+  function getOpenModalScope(trigger) {
+    // Walk up from the clicked button to find the containing modal and its scope.
+    // This is more reliable than document.querySelector('.is-open') which always
+    // returns the first matching element in DOM order regardless of which is visible.
+    if (trigger) {
+      const openModal = trigger.closest('.event_modal');
+      if (openModal) {
+        const scope = openModal.closest('.event_modal_scope');
+        if (scope) return { openModal, scope };
+      }
+    }
+    // Fallback: find by is-open class
     const openModal = document.querySelector('.event_modal.is-open');
     if (!openModal) return null;
     const scope = openModal.closest('.event_modal_scope');
@@ -246,8 +263,8 @@
     return names;
   }
 
-  function getEventData() {
-    const modal = getOpenModalScope();
+  function getEventData(trigger) {
+    const modal = getOpenModalScope(trigger);
     if (!modal) return null;
 
     const { openModal, scope } = modal;
@@ -267,16 +284,15 @@
       if (fallback) dateText = fallback.textContent.trim();
     }
 
-    // Read start/end times from the rendered detail text paragraphs in the first card
-    // Structure: event_modal_detail_card_inner_wrapper > event_modal_detail_content_left_wrapper
-    //            > event_modal_detail_text[0]=start, [1]=separator, [2]=end
+    // Read start/end times from the rendered detail text paragraphs in the first card.
+    // Structure: event_modal_detail_text[0]=start, [1]=end (separator is not this class)
     let startTimeText = '';
     let endTimeText = '';
     const firstCard = scope.querySelector('.event_modal_detail_card_inner_wrapper');
     if (firstCard) {
       const timeEls = firstCard.querySelectorAll('.event_modal_detail_text');
       if (timeEls[0]) startTimeText = timeEls[0].textContent.trim();
-      if (timeEls[2]) endTimeText   = timeEls[2].textContent.trim();
+      if (timeEls[1]) endTimeText   = timeEls[1].textContent.trim();
     }
 
     const slugEl = scope.querySelector(CONFIG.slugSource);
@@ -347,8 +363,9 @@
     const startMin = startT ? startT.min  : CONFIG.defaultStartMinute;
 
     const endT = parseTimeText(data.endTimeText);
-    const endH   = endT ? endT.h   : startH + CONFIG.defaultDurationHours;
-    const endMin = endT ? endT.min  : startMin;
+    const totalMins = endT ? null : startMin + CONFIG.defaultDurationMinutes;
+    const endH   = endT ? endT.h   : startH + Math.floor(totalMins / 60);
+    const endMin = endT ? endT.min  : totalMins % 60;
 
     const dtStart = fmtICS(eventDate, startH, startMin);
     const dtEnd   = fmtICS(eventDate, endH,   endMin);
@@ -371,13 +388,15 @@
     ].join('\r\n');
   }
 
-  function downloadICS(icsContent, slug) {
+  function downloadICS(icsContent, data) {
     try {
       const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
       const url  = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'event-' + (slug || 'sooon') + '.ics';
+      const name = (data.activeArtist || data.venue || 'sooon')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      link.download = 'sooon-' + name + '.ics';
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
@@ -388,16 +407,17 @@
   }
 
   document.addEventListener('click', function(e) {
-    if (!e.target.closest(CONFIG.calendarButton)) return;
+    const btn = e.target.closest(CONFIG.calendarButton);
+    if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
 
-    const data = getEventData();
+    const data = getEventData(btn);
     if (!data || (!data.activeArtist && !data.venue)) {
       console.error('[Kombinat-Calendar] No event data found');
       return;
     }
-    downloadICS(generateICS(data), data.slug);
+    downloadICS(generateICS(data), data);
   });
 
 })();
