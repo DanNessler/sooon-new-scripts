@@ -501,10 +501,11 @@ document.addEventListener("click", function(e) {
   const slug = item.getAttribute("data-target-slug");
   if (!slug) return;
 
-  requestAnimationFrame(() => {
+  // Wait for Finsweet filter + feedWrapper display sync to settle before scrolling
+  setTimeout(function() {
     const target = document.querySelector('.card_feed_item[data-event-slug="' + CSS.escape(slug) + '"]');
     if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  }, 150);
 });
 
 
