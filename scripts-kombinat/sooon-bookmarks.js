@@ -6,10 +6,10 @@
 // and syncs bookmark state across all UI elements.
 //
 // Slug source: [data-bookmark-action="toggle"] carries the event slug
-// in its CMS-bound [data-bookmark-slug] attribute. All other slug
-// lookups (feed card dot indicators, favourites list) use
-// [data-event-slug-source] or [data-feed-slug] textContent within
-// the nearest .event_modal_scope ancestor.
+// in its CMS-bound [data-bookmark-slug] attribute. Feed card dot
+// indicators use [data-event-slug-source] or [data-feed-slug] textContent
+// within the nearest .event_modal_scope ancestor. The favourites list
+// builds its scope lookup directly from [data-bookmark-slug] attributes.
 // ============================================================
 
 (function () {
@@ -184,6 +184,19 @@
     });
   }
 
+  // ── Helpers ──
+  function parseTimeToMinutes(str) {
+    if (!str) return Infinity;
+    const m = str.trim().match(/^(\d+):(\d+)\s*(am|pm)$/i);
+    if (!m) return Infinity;
+    let h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    const isPm = m[3].toLowerCase() === 'pm';
+    if (isPm && h !== 12) h += 12;
+    if (!isPm && h === 12) h = 0;
+    return h * 60 + min;
+  }
+
   // ── UI: Favourites list ──
   // Webflow structure:
   //   [data-favourites-list="container"]
@@ -215,45 +228,28 @@
       }
     });
 
-    // Build slug → scope lookup using CMS-bound data-bookmark-slug (primary)
+    // Build slug → scope lookup using CMS-bound data-bookmark-slug
     const slugToScope = new Map();
     document.querySelectorAll(SEL.toggleBtn + '[data-bookmark-slug]').forEach(function (btn) {
       const s = btn.getAttribute('data-bookmark-slug').trim();
       const scope = btn.closest(SEL.modalScope) || btn.closest(SEL.openModal);
-      console.log(LOG, 'btn slug:', s, '| scope found:', !!scope);
       if (s && scope) slugToScope.set(s, scope);
     });
-    console.log(LOG, 'slugToScope size:', slugToScope.size, '| bookmarks:', bookmarks);
 
-    // Collect bookmark data, then sort by date ascending (earliest first)
-    var bookmarkItems = [];
+    // Collect bookmark data, then sort by time ascending (earliest first)
+    const bookmarkItems = [];
     bookmarks.forEach(function (slug) {
       const scope = slugToScope.get(slug);
       if (!scope) {
         console.warn(LOG, 'Scope not found for slug:', slug);
         return;
       }
-      const data = getEventDataFromScope(scope);
-      bookmarkItems.push({ slug: slug, data: data });
+      bookmarkItems.push({ slug: slug, data: getEventDataFromScope(scope) });
     });
-
-    function parseTimeToMinutes(str) {
-      if (!str) return Infinity;
-      var m = str.trim().match(/^(\d+):(\d+)\s*(am|pm)$/i);
-      if (!m) return Infinity;
-      var h = parseInt(m[1], 10);
-      var min = parseInt(m[2], 10);
-      var isPm = m[3].toLowerCase() === 'pm';
-      if (isPm && h !== 12) h += 12;
-      if (!isPm && h === 12) h = 0;
-      return h * 60 + min;
-    }
 
     bookmarkItems.sort(function (a, b) {
       return parseTimeToMinutes(a.data.date) - parseTimeToMinutes(b.data.date);
     });
-
-    console.log(LOG, 'Sorted order:', bookmarkItems.map(function(i) { return i.slug + ' → ' + i.data.date; }));
 
     // Append a clone for each bookmarked slug in sorted order
     bookmarkItems.forEach(function (item) {
@@ -333,7 +329,7 @@
       }
       if (stableFor >= 3 || attempts > 60) {
         clearInterval(check);
-        console.log(LOG, 'Initialized with', bookmarks.length, 'bookmark(s), btns found:', btns.length);
+        console.log(LOG, 'Initialized with', bookmarks.length, 'bookmark(s).');
         syncAll(null);
       }
     }, 100);
