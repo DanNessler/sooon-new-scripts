@@ -219,11 +219,11 @@
     const slugToScope = new Map();
     document.querySelectorAll(SEL.toggleBtn + '[data-bookmark-slug]').forEach(function (btn) {
       const s = btn.getAttribute('data-bookmark-slug').trim();
-      if (s) {
-        const scope = btn.closest(SEL.modalScope) || btn.closest(SEL.openModal);
-        if (scope) slugToScope.set(s, scope);
-      }
+      const scope = btn.closest(SEL.modalScope) || btn.closest(SEL.openModal);
+      console.log(LOG, 'btn slug:', s, '| scope found:', !!scope);
+      if (s && scope) slugToScope.set(s, scope);
     });
+    console.log(LOG, 'slugToScope size:', slugToScope.size, '| bookmarks:', bookmarks);
 
     // Collect bookmark data, then sort by date ascending (earliest first)
     var bookmarkItems = [];
