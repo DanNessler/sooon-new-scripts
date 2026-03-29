@@ -215,21 +215,11 @@
       }
     });
 
-    // Build slug → scope lookup from all CMS scopes
+    // Build slug → scope lookup using CMS-bound data-bookmark-slug (primary)
     const slugToScope = new Map();
-    document.querySelectorAll(SEL.modalScope).forEach(function (scope) {
-      const el = scope.querySelector(SEL.slugSource);
-      if (el) {
-        const s = el.textContent.trim();
-        if (s) slugToScope.set(s, scope);
-      }
-    });
-
-    // Also index by bookmark button's data-bookmark-slug (CMS-bound)
     document.querySelectorAll(SEL.toggleBtn + '[data-bookmark-slug]').forEach(function (btn) {
       const s = btn.getAttribute('data-bookmark-slug').trim();
-      if (s && !slugToScope.has(s)) {
-        // Scope isn't found via slugSource — store the button's closest scope or modal
+      if (s) {
         const scope = btn.closest(SEL.modalScope) || btn.closest(SEL.openModal);
         if (scope) slugToScope.set(s, scope);
       }
