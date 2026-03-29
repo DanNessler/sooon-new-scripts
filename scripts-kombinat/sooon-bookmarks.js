@@ -317,18 +317,26 @@
   }, true);
 
   // ── Initial sync on page load ──
+  // Wait until the bookmark button count stabilises (all CMS items rendered)
   function waitForCardsAndInit() {
     let attempts = 0;
+    let lastCount = 0;
+    let stableFor = 0;
     const check = setInterval(function () {
-      const cards = document.querySelectorAll(SEL.feedCard);
       attempts++;
       const btns = document.querySelectorAll(SEL.toggleBtn + '[data-bookmark-slug]');
-      if ((cards.length > 1 && btns.length > 0) || attempts > 40) {
+      if (btns.length === lastCount && btns.length > 0) {
+        stableFor++;
+      } else {
+        stableFor = 0;
+        lastCount = btns.length;
+      }
+      if (stableFor >= 3 || attempts > 60) {
         clearInterval(check);
-        console.log(LOG, 'Initialized with', bookmarks.length, 'bookmark(s).');
+        console.log(LOG, 'Initialized with', bookmarks.length, 'bookmark(s), btns found:', btns.length);
         syncAll(null);
       }
-    }, 50);
+    }, 100);
   }
 
   if (document.readyState === 'loading') {
