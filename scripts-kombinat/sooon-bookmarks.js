@@ -253,6 +253,8 @@
       return parseTimeToMinutes(a.data.date) - parseTimeToMinutes(b.data.date);
     });
 
+    console.log(LOG, 'Sorted order:', bookmarkItems.map(function(i) { return i.slug + ' → ' + i.data.date; }));
+
     // Append a clone for each bookmarked slug in sorted order
     bookmarkItems.forEach(function (item) {
       const clone = template.cloneNode(true);
