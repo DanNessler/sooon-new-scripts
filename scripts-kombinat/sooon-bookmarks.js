@@ -322,7 +322,8 @@
     const check = setInterval(function () {
       const cards = document.querySelectorAll(SEL.feedCard);
       attempts++;
-      if (cards.length > 1 || attempts > 40) {
+      const btns = document.querySelectorAll(SEL.toggleBtn + '[data-bookmark-slug]');
+      if ((cards.length > 1 && btns.length > 0) || attempts > 40) {
         clearInterval(check);
         console.log(LOG, 'Initialized with', bookmarks.length, 'bookmark(s).');
         syncAll(null);
