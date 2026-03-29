@@ -247,12 +247,20 @@
       bookmarkItems.push({ slug: slug, data: data });
     });
 
+    function parseTimeToMinutes(str) {
+      if (!str) return Infinity;
+      var m = str.trim().match(/^(\d+):(\d+)\s*(am|pm)$/i);
+      if (!m) return Infinity;
+      var h = parseInt(m[1], 10);
+      var min = parseInt(m[2], 10);
+      var isPm = m[3].toLowerCase() === 'pm';
+      if (isPm && h !== 12) h += 12;
+      if (!isPm && h === 12) h = 0;
+      return h * 60 + min;
+    }
+
     bookmarkItems.sort(function (a, b) {
-      var dateA = new Date(a.data.date);
-      var dateB = new Date(b.data.date);
-      var tA = isNaN(dateA.getTime()) ? Infinity : dateA.getTime();
-      var tB = isNaN(dateB.getTime()) ? Infinity : dateB.getTime();
-      return tB - tA;
+      return parseTimeToMinutes(a.data.date) - parseTimeToMinutes(b.data.date);
     });
 
     // Append a clone for each bookmarked slug in sorted order
