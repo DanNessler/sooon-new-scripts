@@ -534,7 +534,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return window.getComputedStyle(item).display !== 'none';
       });
       feedWrapper.style.display = hasResults ? '' : 'none';
-    }, 50);
+    }, 400);
   }
 
   new MutationObserver(syncEmptyState).observe(listEl, {
