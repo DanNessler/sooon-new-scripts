@@ -515,8 +515,10 @@ document.addEventListener("click", function(e) {
 
 // ========================================================
 // CARD FEED EMPTY STATE
-// Hides .card_feed-wrapper when Finsweet removes all items,
+// Hides .card_feed-wrapper when Finsweet finds no results,
 // revealing the empty state sibling behind it.
+// Uses the fs-cmsfilter-filtered event so it only fires after
+// Finsweet has fully finished filtering — not during transitions.
 // ========================================================
 document.addEventListener('DOMContentLoaded', function() {
   var feedWrapper = document.querySelector('.card_feed-wrapper');
@@ -525,22 +527,13 @@ document.addEventListener('DOMContentLoaded', function() {
   var listEl = feedWrapper.querySelector('[fs-list-element="list"]');
   if (!listEl) return;
 
-  var syncTimeout;
   function syncEmptyState() {
-    clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(function() {
-      var items = listEl.querySelectorAll('.card_feed_item');
-      var hasResults = items.length > 0 && Array.from(items).some(function(item) {
-        return window.getComputedStyle(item).display !== 'none';
-      });
-      feedWrapper.style.display = hasResults ? '' : 'none';
-    }, 400);
+    var items = listEl.querySelectorAll('.card_feed_item');
+    var hasResults = items.length > 0 && Array.from(items).some(function(item) {
+      return window.getComputedStyle(item).display !== 'none';
+    });
+    feedWrapper.style.display = hasResults ? '' : 'none';
   }
 
-  new MutationObserver(syncEmptyState).observe(listEl, {
-    subtree: true,
-    childList: true,
-    attributes: true,
-    attributeFilter: ['style']
-  });
+  window.addEventListener('fs-cmsfilter-filtered', syncEmptyState);
 });
