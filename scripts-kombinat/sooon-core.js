@@ -495,17 +495,21 @@ document.addEventListener("click", function(e) {
 
   e.preventDefault();
 
-  const closeBtn = document.querySelector(".filter_screen .filter-close-button");
-  if (closeBtn) closeBtn.click();
-
   const slug = item.getAttribute("data-target-slug");
   if (!slug) return;
 
-  // Wait for Finsweet filter + feedWrapper display sync to settle before scrolling
+  const closeBtn = document.querySelector(".filter_screen .filter-close-button");
+  if (closeBtn) closeBtn.click();
+
+  // Wait for filter close animation + Finsweet recalculation to fully settle,
+  // then only scroll if the card exists and is visible in the feed.
   setTimeout(function() {
     const target = document.querySelector('.card_feed_item[data-event-slug="' + CSS.escape(slug) + '"]');
-    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 150);
+    if (!target) return;
+    const style = window.getComputedStyle(target);
+    if (style.display === 'none' || style.visibility === 'hidden') return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 400);
 });
 
 
