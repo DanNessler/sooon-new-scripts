@@ -252,7 +252,7 @@
       var dateB = new Date(b.data.date);
       var tA = isNaN(dateA.getTime()) ? Infinity : dateA.getTime();
       var tB = isNaN(dateB.getTime()) ? Infinity : dateB.getTime();
-      return tA - tB;
+      return tB - tA;
     });
 
     // Append a clone for each bookmarked slug in sorted order
