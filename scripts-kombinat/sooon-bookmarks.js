@@ -235,30 +235,42 @@
       }
     });
 
-    // Append a clone for each bookmarked slug
+    // Collect bookmark data, then sort by date ascending (earliest first)
+    var bookmarkItems = [];
     bookmarks.forEach(function (slug) {
       const scope = slugToScope.get(slug);
       if (!scope) {
         console.warn(LOG, 'Scope not found for slug:', slug);
         return;
       }
-
       const data = getEventDataFromScope(scope);
+      bookmarkItems.push({ slug: slug, data: data });
+    });
 
+    bookmarkItems.sort(function (a, b) {
+      var dateA = new Date(a.data.date);
+      var dateB = new Date(b.data.date);
+      var tA = isNaN(dateA.getTime()) ? Infinity : dateA.getTime();
+      var tB = isNaN(dateB.getTime()) ? Infinity : dateB.getTime();
+      return tA - tB;
+    });
+
+    // Append a clone for each bookmarked slug in sorted order
+    bookmarkItems.forEach(function (item) {
       const clone = template.cloneNode(true);
       clone.removeAttribute('data-favourites-template');
       clone.classList.remove('is-template');
-      clone.setAttribute('data-target-slug', slug);
+      clone.setAttribute('data-target-slug', item.slug);
 
       const favArtist = clone.querySelector('[data-fav-artist]');
       const favVenue  = clone.querySelector('[data-fav-venue]');
       const favDate   = clone.querySelector('[data-fav-date]');
       const favCity   = clone.querySelector('[data-fav-city]');
 
-      if (favArtist) favArtist.textContent = data.artist;
-      if (favVenue)  favVenue.textContent  = data.venue;
-      if (favDate)   favDate.textContent   = data.date;
-      if (favCity)   favCity.textContent    = data.city;
+      if (favArtist) favArtist.textContent = item.data.artist;
+      if (favVenue)  favVenue.textContent  = item.data.venue;
+      if (favDate)   favDate.textContent   = item.data.date;
+      if (favCity)   favCity.textContent   = item.data.city;
 
       listWrapper.appendChild(clone);
     });
